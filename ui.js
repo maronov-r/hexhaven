@@ -814,26 +814,40 @@ function renderBoard(){
   const robberVictimMode = mode==='robber';
 
   // hexes
+  const hasImg = typeof TILE_IMG!=='undefined';
   for(const h of b.hexes){
     const cs=hexCorners(h.x,h.y);
+    const img=hasImg&&TILE_IMG[h.terrain];
     const poly=svg('polygon',{points:cs.map(c=>c.join(',')).join(' '),
-      class:'hex'+(h.id===b.robber?' dim':''),
-      fill:h.terrain==='desert'?DESERT_TILE:RES_META[h.terrain].tile});
+      class:'hex'+(!img&&h.id===b.robber?' dim':''),
+      fill:img?'transparent':(h.terrain==='desert'?DESERT_TILE:RES_META[h.terrain].tile)});
+    if(img){
+      const cp=svg('clipPath',{id:'hexclip'+h.id});
+      cp.appendChild(svg('polygon',{points:cs.map(c=>c.join(',')).join(' ')}));
+      defs.appendChild(cp);
+      const ih=2*HEX_SIZE*1.14, iw=ih*1.09; // tile art is slightly wider than tall; overfill hides its rounded corners
+      gH.appendChild(svg('image',{href:img,x:h.x-iw/2,y:h.y-ih/2,width:iw,height:ih,
+        'clip-path':`url(#hexclip${h.id})`,preserveAspectRatio:'none',
+        class:h.id===b.robber?'dim':'', 'pointer-events':'none'}));
+    }
     if(robberVictimMode&&h.id!==b.robber){
       poly.style.cursor='pointer';
       poly.addEventListener('click',()=>onHexTap(h.id));
-      poly.style.filter='brightness(1.12)';
+      if(!img) poly.style.filter='brightness(1.12)';
+      else poly.setAttribute('fill','rgba(240,199,120,.18)');
     }
     gH.appendChild(poly);
-    const shade=svg('polygon',{points:cs.map(c=>c.join(',')).join(' '),fill:'url(#hexshade)','pointer-events':'none'});
-    gH.appendChild(shade);
-    const rim=cs.map(([x,y])=>[h.x+(x-h.x)*0.93,h.y+(y-h.y)*0.93]);
-    gH.appendChild(svg('polygon',{points:rim.map(c=>c.join(',')).join(' '),fill:'none',
-      stroke:'rgba(255,255,255,.13)','stroke-width':1.6,'pointer-events':'none',
-      class:h.id===b.robber?'dim':''}));
-    const artG=svg('g',{class:h.id===b.robber?'dim':'', 'pointer-events':'none'});
-    addTerrainArt(artG,h);
-    gA.appendChild(artG);
+    if(!img){
+      const shade=svg('polygon',{points:cs.map(c=>c.join(',')).join(' '),fill:'url(#hexshade)','pointer-events':'none'});
+      gH.appendChild(shade);
+      const rim=cs.map(([x,y])=>[h.x+(x-h.x)*0.93,h.y+(y-h.y)*0.93]);
+      gH.appendChild(svg('polygon',{points:rim.map(c=>c.join(',')).join(' '),fill:'none',
+        stroke:'rgba(255,255,255,.13)','stroke-width':1.6,'pointer-events':'none',
+        class:h.id===b.robber?'dim':''}));
+      const artG=svg('g',{class:h.id===b.robber?'dim':'', 'pointer-events':'none'});
+      addTerrainArt(artG,h);
+      gA.appendChild(artG);
+    }
     if(h.num){
       const hot=h.num===6||h.num===8;
       const g=svg('g',{class:'token'+(hot?' hot':''),transform:`translate(${h.x},${h.y})`});

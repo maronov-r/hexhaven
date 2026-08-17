@@ -1,6 +1,7 @@
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
-const dir = new URL('.', import.meta.url).pathname;
+import {fileURLToPath} from 'node:url';
+const dir = fileURLToPath(new URL('.', import.meta.url));
 http.createServer(async (req,res)=>{
   const p = req.url==='/' ? '/hexhaven.html' : req.url.split('?')[0];
   try{
