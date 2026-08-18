@@ -310,7 +310,8 @@ input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-r
   font-size:12.5px;font-weight:600;transition:transform .15s,border-color .15s,background .15s}
 .act .al{flex:1;text-align:left}
 .act .cost{display:flex;gap:3px;align-items:center}
-.act:hover{border-color:var(--brass);transform:translateY(-2px)}
+.act:not(.off):hover{border-color:var(--brass);transform:translateY(-2px)}
+.act.off{opacity:.5;cursor:default}
 .act:disabled{opacity:.45;transform:none}
 .act.on{background:var(--brass);color:var(--brass-ink);border-color:transparent}
 .cdot{display:inline-block;width:9px;height:9px;border-radius:2.5px;box-shadow:0 0 0 1px rgba(0,0,0,.35) inset}
@@ -1522,7 +1523,10 @@ function openStealPicker(victims){
 
 /* build modes */
 function toggleMode(m){
-  if(curP(S).bot||!S.rolled) return;
+  if(curP(S).bot) return;
+  const ab=$("act-"+m);
+  if(ab&&ab.classList.contains("off")){ hint(ab.dataset.reason||"Not available right now."); return; }
+  if(!S.rolled) return;
   mode = mode===m?null:m;
   if(mode==='road') hint(S.freeRoads>0?`Free roads left: ${S.freeRoads} — tap an edge`:'Tap an edge to build a road');
   if(mode==='sett') hint('Tap a highlighted corner to build a settlement');
@@ -1566,7 +1570,10 @@ function winOrContinue(stayInMode){
 /* dev cards */
 function onBuyDev(){
   const p=curP(S);
-  if(p.bot||!S.rolled||!canAfford(p,COST.dev)||!S.devDeck.length) return;
+  if(p.bot) return;
+  const ab=$("act-dev");
+  if(ab.classList.contains("off")){ hint(ab.dataset.reason||"Not available right now."); return; }
+  if(!S.rolled||!canAfford(p,COST.dev)||!S.devDeck.length) return;
   const c=buyDev(S,p);
   hint(`You drew: ${DEV_META[c].label}`);
   renderAll(); winOrContinue();
@@ -1907,6 +1914,21 @@ function renderOpponents(){
   }
 }
 
+function needMsg(me,cost){
+  const miss=RES.filter(r=>me.res[r]<(cost[r]||0)).map(r=>`${cost[r]-me.res[r]} ${RES_META[r].label}`);
+  return miss.length?`Need ${miss.join(" + ")}.`:null;
+}
+// returns null when the action is available, else a short reason string
+function buildReason(me,kind){
+  if(!S.rolled) return "Roll the dice first.";
+  if(S.discardQueue.length) return "Discard down to 7 cards first.";
+  if(mode==="robber") return "Move the robber first.";
+  if(kind==="dev"){ if(!S.devDeck.length) return "The development deck is sold out."; return needMsg(me,COST.dev); }
+  if(kind==="city"){ if(me.stock.city<=0) return "No city pieces left."; if(!citySpots(S,me).length) return "You have no settlement to upgrade."; return needMsg(me,COST.city); }
+  if(kind==="sett"){ if(me.stock.sett<=0) return "No settlement pieces left."; if(!settSpots(S,me,false).length) return "No legal spot — needs an open corner on your roads, two away from any building."; return needMsg(me,COST.sett); }
+  if(kind==="road"){ if(me.stock.road<=0) return "No road pieces left."; if(!roadSpots(S,me,null).length) return "No legal spot to extend a road."; if(S.freeRoads>0) return null; return needMsg(me,COST.road); }
+  return null;
+}
 function renderDock(){
   const me=S.players[0];
   const myTurn=curP(S).i===0;
@@ -1949,14 +1971,13 @@ function renderDock(){
     dw.appendChild(d);
   }
 
-  // build + footer
-  const can=(cost)=>myTurn&&S.rolled&&S.phase==='play'&&canAfford(me,cost)&&!S.discardQueue.length&&mode!=='robber';
-  const setBtn=(id,on,enabled)=>{ const b=$(id); b.disabled=!enabled; b.classList.toggle('on',mode===on); };
-  setBtn('act-road','road',(can(COST.road)||(S.freeRoads>0&&myTurn))&&me.stock.road>0&&roadSpots(S,me,null).length>0);
-  setBtn('act-sett','sett',can(COST.sett)&&me.stock.sett>0&&settSpots(S,me,false).length>0);
-  setBtn('act-city','city',can(COST.city)&&me.stock.city>0&&citySpots(S,me).length>0);
-  $('act-dev').disabled=!(can(COST.dev)&&S.devDeck.length>0);
-  $('act-dev').querySelector('.cost').innerHTML=S.devDeck.length?costDots(COST.dev):'—';
+  // build + footer — a blocked action stays tappable and explains itself
+  const setAct=(id,m,reason)=>{ const b=$(id); b.classList.toggle("off",!!reason); b.classList.toggle("on",mode===m); b.dataset.reason=reason||""; };
+  setAct("act-road","road",myTurn?buildReason(me,"road"):"Not your turn.");
+  setAct("act-sett","sett",myTurn?buildReason(me,"sett"):"Not your turn.");
+  setAct("act-city","city",myTurn?buildReason(me,"city"):"Not your turn.");
+  setAct("act-dev","_dev",myTurn?buildReason(me,"dev"):"Not your turn.");
+  $("act-dev").querySelector(".cost").innerHTML=S.devDeck.length?costDots(COST.dev):'<span style="color:var(--faint)">Sold out</span>';
 
   const preRoll=myTurn&&S.phase==='play'&&!S.rolled;
   const rollBtn=$('btn-roll');

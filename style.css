@@ -199,7 +199,8 @@ input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-r
   font-size:12.5px;font-weight:600;transition:transform .15s,border-color .15s,background .15s}
 .act .al{flex:1;text-align:left}
 .act .cost{display:flex;gap:3px;align-items:center}
-.act:hover{border-color:var(--brass);transform:translateY(-2px)}
+.act:not(.off):hover{border-color:var(--brass);transform:translateY(-2px)}
+.act.off{opacity:.5;cursor:default}
 .act:disabled{opacity:.45;transform:none}
 .act.on{background:var(--brass);color:var(--brass-ink);border-color:transparent}
 .cdot{display:inline-block;width:9px;height:9px;border-radius:2.5px;box-shadow:0 0 0 1px rgba(0,0,0,.35) inset}
