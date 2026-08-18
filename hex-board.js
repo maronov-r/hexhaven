@@ -89,32 +89,41 @@ class HexBoard extends HTMLElement {
 
   _bindInput() {
     const el = this._canvas;
-    const pts = new Map();
+    const pts = new Map();               // active pointers by id
     let lastDist = 0;
-    const MINR = 2.4, MAXR = 15;   // higher MAXR lets mobile zoom out to the whole island
-    const dist = () => { const a = [...pts.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
-    el.addEventListener('pointerdown', e => {
+    const MINR = 2.4, MAXR = 15;
+    const twoDist = () => { const a = [...pts.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
+    const down = e => {
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      el.setPointerCapture(e.pointerId);
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
       el.style.cursor = 'grabbing';
-      if (pts.size === 2) lastDist = dist();
-    });
-    el.addEventListener('pointermove', e => {
+      if (pts.size === 2) lastDist = twoDist();
+    };
+    const move = e => {
       const p = pts.get(e.pointerId); if (!p) return;
-      if (pts.size >= 2) {                 // two fingers: pinch zoom
+      if (pts.size === 2) {                       // exactly two fingers -> pinch zoom
         p.x = e.clientX; p.y = e.clientY;
-        const d = dist();
-        if (lastDist) { this._userZoom = true; this._rad = Math.min(MAXR, Math.max(MINR, this._rad * (lastDist / d))); }
+        const d = twoDist();
+        if (lastDist && d) { this._userZoom = true; this._rad = Math.min(MAXR, Math.max(MINR, this._rad * (lastDist / d))); }
         lastDist = d;
-      } else {                             // one finger: orbit
+      } else if (pts.size === 1) {                // one finger -> orbit / look around
         this._az -= (e.clientX - p.x) * 0.006;
         this._po = Math.min(1.42, Math.max(0.22, this._po - (e.clientY - p.y) * 0.005));
         p.x = e.clientX; p.y = e.clientY;
-      }
-    });
-    const stop = e => { pts.delete(e.pointerId); if (pts.size < 2) lastDist = 0; if (!pts.size) el.style.cursor = 'grab'; };
-    el.addEventListener('pointerup', stop);
-    el.addEventListener('pointercancel', stop);
+      } else { p.x = e.clientX; p.y = e.clientY; } // 3+ fingers: track only, never zoom
+    };
+    const up = e => {
+      if (pts.delete(e.pointerId)) { try { el.releasePointerCapture(e.pointerId); } catch (_) {} }
+      if (pts.size < 2) lastDist = 0;
+      if (!pts.size) el.style.cursor = 'grab';
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    // release/cancel listened on window: a finger lifted off the canvas still clears,
+    // so a stale pointer can never wedge the gesture into permanent pinch-zoom mode
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    el.addEventListener('lostpointercapture', up);
     el.addEventListener('wheel', e => {
       e.preventDefault();
       this._userZoom = true;
