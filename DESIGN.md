@@ -44,7 +44,28 @@ Theme name: **"night sea table."** A committed **dark theme only** (the 3D scene
 
 **Rules:** brass is the *only* accent — spend it on VP, primary buttons, active states, focus. Semantic good/bad is not the accent. Neutrals are cool-biased on purpose; don't reach for pure grey.
 
-## 4. Typography
+## 4. Terrain tiles (the hero art)
+
+Six terrain types, built as **low-poly 3D hexes** (three.js primitives, no textures) and lit for the dark scene. Each tile **breathes** — the ambient animation is what sells the island — and every hex is randomly rotated to one of its six orientations so seams tile cleanly.
+
+| Terrain | Yields | Tile ground | Living detail |
+| --- | --- | --- | --- |
+| **Forest** | Lumber | `#2f6b45` | pines sway; a lumberjack chops |
+| **Pasture** | Wool | `#7fae53` | sheep dip their heads in leaning grass |
+| **Fields** | Grain | `#d0a53a` | rows of ripening wheat |
+| **Hills** | Brick | `#a9553a` | red-clay pits and stacked brick |
+| **Mountains** | Ore | `#6b7a94` | snow-capped peaks; an eagle circles |
+| **Desert** | — (robber's home) | `#c9b48a` | dunes and cactus; static |
+
+Engine→3D key mapping: `wood→forest, brick→hills, sheep→pasture, wheat→fields, ore→mountains, desert→desert`.
+
+- **Number tokens** are DOM chips over the board (cream disc, serif value, probability pips). **6 and 8 are red** (`#a8321f`) as the high-odds numbers; all others `#4a3524`.
+- **Harbours** sit on the water ring: **2:1** for a named resource, **3:1** for any.
+- **The robber** parks on a tile and desaturates it (`saturate(.4) brightness(.62)`) to block its payout; it starts on the desert.
+- **Water** is deliberately static; boats drift near harbours. Keep the sea calm — motion belongs to the land.
+- *Known quirk:* the desert art has a robber figure baked in, so it shows even when the robber has moved — swap the desert model to fix.
+
+## 5. Typography
 
 Two roles only.
 - **Display** `--disp`: `"Iowan Old Style", "Palatino Nova", Palatino, "Book Antiqua", Georgia, serif`. Used for the wordmark, numbers, VP counts, dice totals, screen titles, number tokens. Gives the premium board-game feel.
@@ -52,7 +73,7 @@ Two roles only.
 
 Wordmark: `HEX` in `--ink`, `HAVEN` in `--brass`, wide letter-spacing (`.14–.22em`). Uppercase labels get `.09–.24em` tracking. Numbers that line up use `font-variant-numeric: tabular-nums` (`.num`).
 
-## 5. Surfaces, radius, depth
+## 6. Surfaces, radius, depth
 
 **Glass panel** (every floating surface):
 ```css
@@ -66,7 +87,7 @@ box-shadow: 0 14px 34px rgba(0,0,0,.42);
 **Shadows:** chips `0 10px 24px rgba(0,0,0,.38)` · panels `0 14px 34px rgba(0,0,0,.42)` · modals `0 22px 54px rgba(0,0,0,.5)`.
 **Opacity states:** disabled `.45` · inactive rival `.66` · idle chronicle `.2`.
 
-## 6. Motion
+## 7. Motion
 
 Standard easing everywhere: `cubic-bezier(.2,.9,.25,1)`. Keep it purposeful — a few orchestrated moments, not constant movement (the living 3D board already provides ambient life).
 - `hh-rise` — screens/panels enter (fade + 7–9px up).
@@ -77,11 +98,11 @@ Standard easing everywhere: `cubic-bezier(.2,.9,.25,1)`. Keep it purposeful — 
 - `hb-pop` — number token flashes on a matching roll.
 Respect `prefers-reduced-motion` (all animation/transition disabled).
 
-## 7. Iconography
+## 8. Iconography
 
 **No emoji, ever.** Inline SVG only, for consistent cross-platform rendering. Two sets: rich game-icons.net silhouettes (used ≥13px) with a geometric fallback for tiny/chrome glyphs. **Keep the attribution** (game-icons.net — Lorc, Delapouite, Faithtoken, CC BY 3.0) in the How-to-play screen. Terrain art on tiles is 3D (three.js primitives), not icons.
 
-## 8. Layout & components
+## 9. Layout & components
 
 **Five screens**, all keeping the island visible behind them: **loading** (crest + progress bar) → **menu** (wordmark + actions over a left-weighted scrim, island pushed right) → **setup** (glass card; the island re-deals live as you change options) → **how-to-play** → **game**.
 
@@ -94,7 +115,7 @@ Respect `prefers-reduced-motion` (all animation/transition disabled).
 
 **Card & control anatomy:** resource card = colored 5px top band + serif count + tiny uppercase label; hover lifts and rotates slightly. Cost is shown as 9px rounded resource-colored dots. Segmented controls: equal-width buttons, selected = brass fill + brass-ink text. Selection borders are 2px brass.
 
-## 9. Mobile (the map must stay the star)
+## 10. Mobile (the map must stay the star)
 
 Both orientations are first-class.
 - **Portrait:** rival strip on top, board fills the middle, **dock is a draggable bottom sheet** with a grab handle — pull down to collapse to a slim action bar so the whole island shows, pull up to expand.
@@ -102,7 +123,7 @@ Both orientations are first-class.
 - **Board gestures:** one finger orbits/looks around; two fingers pinch-zoom. Generous zoom-out so the whole island fits on a phone.
 - **Hide panels** clears the chrome entirely for a pure-map view.
 
-## 10. Do / Don't
+## 11. Do / Don't
 
 **Do:** keep the board visible and central; use `var(--*)` tokens, never raw hex; spend brass sparingly; serif for numbers/titles; quiet, literal copy; glass over the board; test both phone orientations.
 **Don't:** add a light mode; introduce a second accent; use emoji in the UI; use pure grey neutrals; cover the map with opaque chrome; add hype/urgency/income-claim copy; call it Catan; break the fixed dock footer (Roll/Trade/End must always be reachable).
