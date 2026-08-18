@@ -66,6 +66,8 @@ Persistence: `localStorage` keys `hexhaven-save-v1` (game) and `hexhaven-setting
 
 ## Design system (non-negotiable — this is a committed, single dark theme)
 
+> Full portable brief in **`DESIGN.md`** — paste that whole file (or its GitHub raw link) into any design session to convey the visual system without the repo. Summary below.
+
 The look is **"night sea table"**: a dark teal ocean with a warm brass accent, serif display type, and translucent glass panels floating over a 3D island. It deliberately commits to one theme (no light mode) — the 3D scene is lit for dark.
 
 **Tokens live in `style.css` `:root` — always use the `var(--*)`, never raw hex.**
