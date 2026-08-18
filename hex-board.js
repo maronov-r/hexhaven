@@ -5,6 +5,7 @@
 // take THREE as an argument rather than importing it.
 import * as THREE from 'https://unpkg.com/three@0.184.0/build/three.module.js';
 import { buildTile } from './export/tiles3d.js';
+import { buildExpansionTile, EXPANSION_KINDS, registerExpansionLife, stepExpansionLife } from './export/tiles3d.expansion.js';
 import { buildPiece, ROBBER_COLOR } from './export/pieces3d.js';
 
 const R = 0.5, SC = 1.02, STEP = Math.PI / 3, TOPY = 0.09;
@@ -196,7 +197,8 @@ class HexBoard extends HTMLElement {
     for (const h of S.board.hexes) {
       const [x, z] = toWorld(h.x, h.y);
       if (spins[h.id] === undefined) spins[h.id] = spin();
-      this._addTile(KIND[h.terrain] || 'desert', x, z, spins[h.id]);
+      // h.art lets a hex render an expansion tile without touching the terrain rules
+      this._addTile(h.art || KIND[h.terrain] || 'desert', x, z, spins[h.id]);
       if (h.num) this._addChip(h, x, z);
     }
 
@@ -246,11 +248,16 @@ class HexBoard extends HTMLElement {
   }
 
   _addTile(kind, x, z, ry) {
-    const tile = buildTile(THREE, kind, { noToken: true });
+    const tile = EXPANSION_KINDS.includes(kind)
+      ? buildExpansionTile(THREE, kind, { noToken: true })
+      : buildTile(THREE, kind, { noToken: true });
     tile.position.set(x, 0, z);
     tile.rotation.y = ry;
-    tile.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    // translucent props (smoke, mist, glints) opt out of casting — a puff must not
+    // drop a hard blob on the next hex
+    tile.traverse(o => { if (o.isMesh) { if (!o.userData.noShadow) o.castShadow = true; o.receiveShadow = true; } });
     this._registerLife(tile);
+    registerExpansionLife(THREE, tile, this._life);
     this._terrain.add(tile);
   }
 
@@ -445,6 +452,7 @@ class HexBoard extends HTMLElement {
       c.pivot.rotation.z = u < 0.55 ? -1.0 + 1.9 * (u / 0.55)
         : u < 0.68 ? 0.9 - 1.9 * ((u - 0.55) / 0.13) : -1.0;
     }
+    stepExpansionLife(L, t);
     const d = this._rad, a = this._az, p = this._po;
     // slide the look-at point sideways so the island sits centred in the gap the
     // floating panels leave, without moving the horizon

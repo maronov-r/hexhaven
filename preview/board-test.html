@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Hexhaven — expansion tiles on the real board</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #081019; color: #eae4d3;
+    font: 13px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  hex-board { position: absolute; inset: 0; }
+  .hud { position: absolute; left: 18px; top: 16px; z-index: 5; max-width: 30ch;
+    background: rgba(13,27,42,.82); backdrop-filter: blur(16px) saturate(1.2);
+    border: 1px solid rgba(154,190,225,.14); border-radius: 14px; padding: 14px 16px;
+    box-shadow: 0 14px 34px rgba(0,0,0,.42); }
+  .hud h1 { margin: 0 0 6px; font: 400 16px/1.2 "Iowan Old Style", Palatino, Georgia, serif; }
+  .hud p { margin: 0; color: #9fb0c2; }
+  .hud code { color: #e0b15e; font-size: 11.5px; }
+  .hud b { color: #eae4d3; font-weight: 600; }
+  .err { position: absolute; left: 18px; bottom: 16px; z-index: 5; color: #e07070;
+    font: 11.5px/1.6 ui-monospace, Menlo, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="hud">
+  <h1>Patched board</h1>
+  <p>The real <b>&lt;hex-board&gt;</b> running <code>tiles3d.js</code> and
+  <code>tiles3d.expansion.js</code> side by side. Base terrains keep their own art;
+  the outer hexes carry <code>h.art</code>. Drag to orbit, pinch or scroll to zoom.</p>
+</div>
+<div class="err" id="err"></div>
+<hex-board id="board"></hex-board>
+<script type="module">
+const err = document.getElementById('err');
+addEventListener('error', e => { err.textContent += (e.message || e.error) + '\n'; });
+addEventListener('unhandledrejection', e => { err.textContent += 'promise: ' + e.reason + '\n'; });
+
+await import('../hex-board.js');
+
+const HEX = 56, SQ3 = Math.sqrt(3);
+const at = (q, r) => ({ q, r, x: HEX * SQ3 * (q + r / 2), y: HEX * 1.5 * r });
+
+// centre ring: base terrain (unchanged rules). outer ring: expansion art via h.art
+const plan = [
+  [0, 0, 'wood', 8, null],
+  [1, 0, 'ore', 5, null],
+  [0, 1, 'sheep', 9, null],
+  [-1, 1, 'wheat', 6, null],
+  [-1, 0, 'brick', 3, null],
+  [0, -1, 'desert', null, null],
+  [1, -1, 'ore', 4, 'volcano'],
+  [2, -1, 'wood', 5, 'jungle'],
+  [1, 1, 'sheep', 9, 'pasture_weavery'],
+  [-1, 2, 'wheat', 6, 'gold'],
+  [-2, 1, 'wood', 4, 'forest_mill'],
+  [-2, 0, 'ore', 8, 'mountains_mine'],
+  [0, 2, 'desert', null, 'oasis'],
+  [2, 0, 'desert', null, 'monument'],
+  [-1, -1, 'desert', null, 'ruins'],
+  [1, -2, 'desert', null, 'tradepost'],
+  [-2, 2, 'desert', null, 'swamp'],
+  [2, -2, 'desert', null, 'isle'],
+];
+
+const hexes = plan.map(([q, r, terrain, num, art], id) =>
+  Object.assign({ id, terrain, num, art }, at(q, r)));
+
+const S = {
+  players: [{ color: '#e0555a' }],
+  board: { hexes, V: {}, E: {}, ports: [], robber: null },
+};
+
+const board = document.getElementById('board');
+const start = () => { board.setState(S); board.setPanels(0, 0, 0); };
+if (window.__hexBoard) start();
+else document.addEventListener('hex-board-ready', start, { once: true });
+</script>
+</body>
+</html>
