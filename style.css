@@ -136,6 +136,9 @@ input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-r
   font-size:12px;color:var(--dim);pointer-events:none;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
   backdrop-filter:blur(6px);transition:opacity .2s}
 .hint-pill.hide{opacity:0}
+.hint-pill.warn{color:#ff9a9a;background:rgba(48,16,18,.92);border-color:rgba(224,112,112,.65);font-weight:600}
+@keyframes hh-shake{0%,100%{transform:translateX(-50%)}20%{transform:translateX(calc(-50% - 6px))}40%{transform:translateX(calc(-50% + 6px))}60%{transform:translateX(calc(-50% - 4px))}80%{transform:translateX(calc(-50% + 4px))}}
+.hint-pill.shake{animation:hh-shake .38s ease}
 
 /* rival strip */
 .rival-strip{position:absolute;left:14px;right:354px;bottom:14px;z-index:2;display:flex;gap:8px}

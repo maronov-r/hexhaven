@@ -395,7 +395,7 @@ function openStealPicker(victims){
 function toggleMode(m){
   if(curP(S).bot) return;
   const ab=$("act-"+m);
-  if(ab&&ab.classList.contains("off")){ hint(ab.dataset.reason||"Not available right now."); return; }
+  if(ab&&ab.classList.contains("off")){ hint(ab.dataset.reason||"Not available right now.",true); return; }
   if(!S.rolled) return;
   mode = mode===m?null:m;
   if(mode==='road') hint(S.freeRoads>0?`Free roads left: ${S.freeRoads} — tap an edge`:'Tap an edge to build a road');
@@ -442,7 +442,7 @@ function onBuyDev(){
   const p=curP(S);
   if(p.bot) return;
   const ab=$("act-dev");
-  if(ab.classList.contains("off")){ hint(ab.dataset.reason||"Not available right now."); return; }
+  if(ab.classList.contains("off")){ hint(ab.dataset.reason||"Not available right now.",true); return; }
   if(!S.rolled||!canAfford(p,COST.dev)||!S.devDeck.length) return;
   const c=buyDev(S,p);
   hint(`You drew: ${DEV_META[c].label}`);
@@ -732,7 +732,7 @@ function showGameOver(){
 }
 
 /* ---------------- rendering ---------------- */
-function hint(msg){ const h=$('hint'); h.textContent=msg; h.classList.remove('hide'); }
+function hint(msg,warn){ const h=$('hint'); h.textContent=msg; h.classList.remove('hide','shake'); h.classList.toggle('warn',!!warn); if(warn){ void h.offsetWidth; h.classList.add('shake'); } }
 
 function animateDice(){
   $('dicebox').querySelectorAll('.die').forEach(d=>{ d.classList.remove('rolling'); void d.offsetWidth; d.classList.add('rolling'); });

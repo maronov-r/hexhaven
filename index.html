@@ -247,6 +247,9 @@ input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-r
   font-size:12px;color:var(--dim);pointer-events:none;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
   backdrop-filter:blur(6px);transition:opacity .2s}
 .hint-pill.hide{opacity:0}
+.hint-pill.warn{color:#ff9a9a;background:rgba(48,16,18,.92);border-color:rgba(224,112,112,.65);font-weight:600}
+@keyframes hh-shake{0%,100%{transform:translateX(-50%)}20%{transform:translateX(calc(-50% - 6px))}40%{transform:translateX(calc(-50% + 6px))}60%{transform:translateX(calc(-50% - 4px))}80%{transform:translateX(calc(-50% + 4px))}}
+.hint-pill.shake{animation:hh-shake .38s ease}
 
 /* rival strip */
 .rival-strip{position:absolute;left:14px;right:354px;bottom:14px;z-index:2;display:flex;gap:8px}
@@ -1525,7 +1528,7 @@ function openStealPicker(victims){
 function toggleMode(m){
   if(curP(S).bot) return;
   const ab=$("act-"+m);
-  if(ab&&ab.classList.contains("off")){ hint(ab.dataset.reason||"Not available right now."); return; }
+  if(ab&&ab.classList.contains("off")){ hint(ab.dataset.reason||"Not available right now.",true); return; }
   if(!S.rolled) return;
   mode = mode===m?null:m;
   if(mode==='road') hint(S.freeRoads>0?`Free roads left: ${S.freeRoads} — tap an edge`:'Tap an edge to build a road');
@@ -1572,7 +1575,7 @@ function onBuyDev(){
   const p=curP(S);
   if(p.bot) return;
   const ab=$("act-dev");
-  if(ab.classList.contains("off")){ hint(ab.dataset.reason||"Not available right now."); return; }
+  if(ab.classList.contains("off")){ hint(ab.dataset.reason||"Not available right now.",true); return; }
   if(!S.rolled||!canAfford(p,COST.dev)||!S.devDeck.length) return;
   const c=buyDev(S,p);
   hint(`You drew: ${DEV_META[c].label}`);
@@ -1862,7 +1865,7 @@ function showGameOver(){
 }
 
 /* ---------------- rendering ---------------- */
-function hint(msg){ const h=$('hint'); h.textContent=msg; h.classList.remove('hide'); }
+function hint(msg,warn){ const h=$('hint'); h.textContent=msg; h.classList.remove('hide','shake'); h.classList.toggle('warn',!!warn); if(warn){ void h.offsetWidth; h.classList.add('shake'); } }
 
 function animateDice(){
   $('dicebox').querySelectorAll('.die').forEach(d=>{ d.classList.remove('rolling'); void d.offsetWidth; d.classList.add('rolling'); });
