@@ -179,7 +179,7 @@ function renderSetup(){
     <div><div class="field-lab">Friendly robber<small>No stealing from players under 3 points</small></div>${seg('friendlyRobber',[{v:false,l:'Off'},{v:true,l:'On'}],s.friendlyRobber)}</div>
     <div><div class="field-lab">Bots may offer you trades</div>${seg('botTrades',[{v:false,l:'Off'},{v:true,l:'On'}],s.botTrades)}</div>
     <div><div class="field-lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>
-    <div><div class="field-lab">Wild terrains<small>Expansion: adds a Gold Field (pays any resource) + a jungle</small></div>${seg('expWild',[{v:false,l:'Off'},{v:true,l:'On'}],s.expWild)}</div>`;
+    <div><div class="field-lab">Wild &amp; Wonders<small>Gold Field, volcano, oasis, jungle, swamp + trade post, ruins &amp; monument</small></div>${seg('expWild',[{v:false,l:'Off'},{v:true,l:'On'}],s.expWild)}</div>`;
   $('setup-body').querySelectorAll('[data-seg]').forEach(g=>{
     g.querySelectorAll('button').forEach(b=>b.onclick=()=>{
       g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
@@ -331,8 +331,39 @@ function doSetupRoad(p,ek){
 /* ---------------- player turn ---------------- */
 function beginPlayerTurn(){
   mode=null;
+  if(S.goldPending>0){ openGoldChooser(S.goldPending); return; }
   hint(S.rolled?'Build, trade, or end your turn':'Roll the dice');
   renderAll();
+}
+function openGoldChooser(n){
+  $('overlay').dataset.lock='1';
+  const picks=[];
+  const bankFree=r=>S.bank[r]-picks.filter(x=>x===r).length>0;
+  openSheet(`<h2>Gold Field</h2><div class="sub">Choose ${n} resource${n>1?'s':''} to take from the bank.</div>${resChoiceGrid('gold')}
+    <div class="sheet-actions"><button class="btn primary" id="gold-ok" disabled>Take</button></div>`);
+  const refresh=()=>{
+    $('gold-ok').disabled=picks.length!==n;
+    $('gold-ok').textContent=`Take (${picks.length}/${n})`;
+    $('gold').querySelectorAll('.choice').forEach(b=>{
+      const r=b.dataset.r, c=picks.filter(x=>x===r).length;
+      b.classList.toggle('on',c>0);
+      b.disabled=c===0&&!bankFree(r);
+      b.innerHTML=`<span class="ic">${resIconHTML(r,24)}</span>${RES_META[r].label}${c?` ×${c}`:''}`;
+    });
+  };
+  $('gold').querySelectorAll('.choice').forEach(b=>b.onclick=()=>{
+    const r=b.dataset.r, c=picks.filter(x=>x===r).length;
+    if(picks.length<n&&bankFree(r)) picks.push(r);
+    else if(c>0) picks.splice(picks.indexOf(r),1);
+    refresh();
+  });
+  $('gold-ok').onclick=()=>{
+    for(const r of picks){ S.bank[r]--; S.players[0].res[r]++; }
+    S.goldPending=0; $('overlay').dataset.lock=''; closeSheet();
+    flashRes.clear(); for(const r of picks) flashRes.add(r);
+    beginPlayerTurn();
+  };
+  refresh();
 }
 function onRoll(){
   if(S.phase!=='play'||curP(S).bot||S.rolled) return;
@@ -340,7 +371,7 @@ function onRoll(){
   const r=rollDice(S); afterAnyRoll();
   renderAll();
   if(r.seven){ S.afterSeven=true; setTimeout(advance,tick()); }
-  else hint('Build, trade, or end your turn');
+  else { hint('Build, trade, or end your turn'); if(S.goldPending>0) openGoldChooser(S.goldPending); }
   saveGame();
 }
 function beginRobber(){

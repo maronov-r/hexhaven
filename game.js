@@ -193,11 +193,19 @@ function newGame(settings){
 // A hex names its 3D model via h.art while the engine keeps paying out on h.terrain.
 // 'gold' is a real new terrain (pays a wild); 'jungle' is art-only over wood (pays lumber).
 function applyWildExpansion(S){
-  const pick=a=>a[Math.floor(Math.random()*a.length)];
-  const goldCands=S.board.hexes.filter(h=>h.num&&h.terrain!=='desert'&&h.num!==6&&h.num!==8);
-  if(goldCands.length){ const g=pick(goldCands); g.terrain='gold'; g.art='gold'; }
-  const forests=S.board.hexes.filter(h=>h.terrain==='wood'&&!h.art);
-  if(forests.length){ pick(forests).art='jungle'; }
+  const pick=a=>a.length?a[Math.floor(Math.random()*a.length)]:null;
+  const take=f=>pick(S.board.hexes.filter(h=>h.terrain!=='desert'&&!h.art&&!h.site&&f(h)));
+  // Gold Field — the one genuinely new terrain (pays a wild)
+  const g=take(h=>h.num&&h.num!==6&&h.num!==8); if(g){ g.terrain='gold'; g.art='gold'; }
+  // art reskins over their matching resource — still produce that resource
+  const j=take(h=>h.terrain==='wood');  if(j) j.art='jungle';
+  const o=take(h=>h.terrain==='wheat'); if(o) o.art='oasis';
+  const w=take(h=>h.terrain==='brick'); if(w) w.art='swamp';
+  const v=take(h=>h.terrain==='ore');   if(v){ v.art='volcano'; v.volcano=true; }
+  // Wonders — art over a producer plus a one-tile effect
+  const tp=take(h=>h.num); if(tp){ tp.art='tradepost'; tp.site='tradepost'; S.hasTradepost=true; }
+  const ru=take(h=>h.num); if(ru){ ru.art='ruins';     ru.site='ruins';     ru.claimedBy=null; }
+  const mo=take(h=>h.num); if(mo){ mo.art='monument';  mo.site='monument';  mo.claimedBy=null; S.hasMonument=true; }
 }
 // least-held resource the bank can still pay (used for Gold Field's wild payout)
 function neediestResource(S,pl){
@@ -213,6 +221,7 @@ function vp(S,p,includeHidden){
     if(vx.bld&&vx.bld.p===p.i) v += vx.bld.type==='city'?2:1;
   if(S.longestRoad.owner===p.i) v+=2;
   if(S.largestArmy.owner===p.i) v+=2;
+  if(S.hasMonument){ for(const h of S.board.hexes) if(h.site==='monument'&&h.claimedBy===p.i){ v+=1; break; } }
   if(includeHidden) v+=p.devVp;
   return v;
 }
@@ -265,9 +274,13 @@ function portsOf(S,p){
 }
 function rateFor(S,p,res){
   const ports=portsOf(S,p);
-  if(ports.has(res)) return 2;
-  if(ports.has('any')) return 3;
-  return 4;
+  let rate = ports.has(res)?2 : ports.has('any')?3 : 4;
+  // Trade Post: a building touching it grants 3:1 on anything
+  if(rate>3 && S.hasTradepost){
+    for(const v of Object.values(S.board.V))
+      if(v.bld&&v.bld.p===p.i && v.hexes.some(hid=>S.board.hexes[hid].site==='tradepost')){ rate=3; break; }
+  }
+  return rate;
 }
 
 /* ---------------- mutations ---------------- */
@@ -277,6 +290,12 @@ function placeSett(S,p,vk,setup){
   p.stock.sett--;
   if(!setup){ pay(S,p,COST.sett); recomputeLongestRoad(S); }
   log(S,`<b>${p.name}</b> built a settlement`);
+  // Wonders: first settlement touching a site claims it
+  for(const hid of v.hexes){
+    const h=S.board.hexes[hid];
+    if(h.site==='ruins'&&!h.claimedBy){ h.claimedBy=p.i; for(const r of RES) if(S.bank[r]>0){ S.bank[r]--; p.res[r]++; } log(S,`<b>${p.name}</b> unearths the Ruins — +1 of each resource`,true); }
+    else if(h.site==='monument'&&!h.claimedBy){ h.claimedBy=p.i; log(S,`<b>${p.name}</b> claims the Monument — +1 VP`,true); }
+  }
 }
 function placeCity(S,p,vk){
   S.board.V[vk].bld={p:p.i,type:'city'};
@@ -345,9 +364,20 @@ function distribute(S,total){
   }
   // Gold Field pays a wild — each affected player auto-takes their neediest from the bank
   for(const pi of Object.keys(gold)){
-    const pl=S.players[pi]; let got=0;
-    for(let k=0;k<gold[pi];k++){ const r=neediestResource(S,pl); if(r){ S.bank[r]--; pl.res[r]++; gains[pi][r]++; got++; } }
-    if(got) log(S,`<b>${pl.name}</b> struck gold (+${got})`);
+    if(+pi===0){ // human picks their gold at the start of their turn
+      S.goldPending=(S.goldPending||0)+gold[pi];
+      log(S,`<b>You</b> struck gold — choose your reward (+${gold[pi]})`);
+    } else {
+      const pl=S.players[pi]; let got=0;
+      for(let k=0;k<gold[pi];k++){ const r=neediestResource(S,pl); if(r){ S.bank[r]--; pl.res[r]++; gains[pi][r]++; got++; } }
+      if(got) log(S,`<b>${pl.name}</b> struck gold (+${got})`);
+    }
+  }
+  // Volcano erupts on a big doubles roll (4-4 / 5-5 / 6-6, ~1 in 12) — the robber is
+  // cast onto it, blocking it. Independent of the volcano's own number.
+  if(S.dice && S.dice[0]===S.dice[1] && S.dice[0]>=4){
+    const erupt=S.board.hexes.find(h=>h.volcano&&h.id!==S.board.robber);
+    if(erupt){ S.board.robber=erupt.id; log(S,`The volcano erupts — the robber is cast onto it!`,true); }
   }
 }
 
