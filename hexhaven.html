@@ -1298,6 +1298,8 @@ const DEFAULT_SETTINGS={
   expWild:false, mapSize:2, expSea:false,
 };
 let settings=loadSettings();
+// Expansions are dev-only for now — visible in setup only with ?dev in the URL.
+const DEV = /(?:\?|&)dev\b/.test(location.search);
 let S=null;            // game state
 let mode=null;         // board interaction mode
 let botTimer=null;
@@ -1422,6 +1424,7 @@ function togglePanels(){
 function showSetup(fromNew){
   fromMenuNew=fromNew;
   draft={...settings};
+  if(!DEV){ draft.expWild=false; draft.expSea=false; }   // expansions off for players
   $('setup-sub').textContent=fromNew?'Then deal yourself in.':'Applies to your next island.';
   $('setup-go').textContent=fromNew?'Start game':'Save and start';
   renderSetup();
@@ -1442,8 +1445,9 @@ function renderSetup(){
     <div><div class="field-lab">Friendly robber<small>No stealing from players under 3 points</small></div>${seg('friendlyRobber',[{v:false,l:'Off'},{v:true,l:'On'}],s.friendlyRobber)}</div>
     <div><div class="field-lab">Bots may offer you trades</div>${seg('botTrades',[{v:false,l:'Off'},{v:true,l:'On'}],s.botTrades)}</div>
     <div><div class="field-lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>
+    ${DEV?`<div class="field-lab" style="color:var(--brass);letter-spacing:.1em;margin-top:6px">EXPANSIONS · DEV</div>
     <div><div class="field-lab">Wild &amp; Wonders<small>Gold Field, volcano, oasis, jungle, swamp + trade post, ruins &amp; monument</small></div>${seg('expWild',[{v:false,l:'Off'},{v:true,l:'On'}],s.expWild)}</div>
-    <div><div class="field-lab">Voyages<small>Splits the map into two islands — build ships across the sea (🌲+🐑)</small></div>${seg('expSea',[{v:false,l:'Off'},{v:true,l:'On'}],s.expSea)}</div>`;
+    <div><div class="field-lab">Voyages<small>Splits the map into two islands — build ships across the sea (🌲+🐑)</small></div>${seg('expSea',[{v:false,l:'Off'},{v:true,l:'On'}],s.expSea)}</div>`:''}`;
   $('setup-body').querySelectorAll('[data-seg]').forEach(g=>{
     g.querySelectorAll('button').forEach(b=>b.onclick=()=>{
       g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));

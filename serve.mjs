@@ -8,8 +8,8 @@ const TYPES = {
   '.png':'image/png', '.jpg':'image/jpeg', '.svg':'image/svg+xml',
 };
 http.createServer(async (req,res)=>{
-  let p = req.url==='/' ? '/index.html' : req.url.split('?')[0];
-  p = p.replace(/\.\./g,'');
+  let p = req.url.split('?')[0].replace(/\.\./g,'');
+  if(p==='/'||p==='') p='/index.html';
   const ext = (p.match(/\.[a-z0-9]+$/i)||['.html'])[0].toLowerCase();
   try{
     const data = await readFile(dir+p);
