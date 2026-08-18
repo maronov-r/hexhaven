@@ -16,6 +16,7 @@ const ICONS={
   gift:'<rect x="-8" y="-3" width="16" height="11" rx="1.5"/><path d="M0 -3 V8 M-8 -3 H8 M0 -3 C -6 -3 -6 -9 -2 -8 C 1 -7 0 -4 0 -3 C 0 -4 -1 -7 2 -8 C 6 -9 6 -3 0 -3"/>',
   gear:'<circle cx="0" cy="0" r="3.4"/><path d="M0 -9 V-6 M0 6 V9 M-9 0 H-6 M6 0 H9 M-6.4 -6.4 L-4.2 -4.2 M4.2 4.2 L6.4 6.4 M-6.4 6.4 L-4.2 4.2 M4.2 -4.2 L6.4 -6.4"/>',
   menu:'<path d="M-8 -5 H8 M-8 0 H8 M-8 5 H8"/>',
+  ship:'<path d="M-8 4 L8 4 L5 9 L-5 9 Z"/><path d="M0 4 L0 -8 L6 -1 L0 0"/>',
   coins:'<circle cx="-3" cy="-3" r="5.5"/><path d="M2 -1 a5.5 5.5 0 1 1 -7 7"/>',
   rosette:'<circle cx="0" cy="0" r="5"/><path d="M0 -5 V-9 M0 5 V9 M-5 0 H-9 M5 0 H9 M-3.5 -3.5 L-6.4 -6.4 M3.5 3.5 L6.4 6.4 M-3.5 3.5 L-6.4 6.4 M3.5 -3.5 L6.4 -6.4"/>',
   flag:'<path d="M-6 9 V-9 M-6 -8 H7 L3 -4 L7 0 H-6"/>',
@@ -32,7 +33,7 @@ const SAVE_KEY='hexhaven-save-v1', SET_KEY='hexhaven-settings-v1';
 const DEFAULT_SETTINGS={
   name:'You', colorIdx:0, bots:3, difficulty:'standard', target:10,
   layout:'spiral', friendlyRobber:false, botTrades:true, speed:'normal',
-  expWild:false, mapSize:2,
+  expWild:false, mapSize:2, expSea:false,
 };
 let settings=loadSettings();
 let S=null;            // game state
@@ -179,14 +180,15 @@ function renderSetup(){
     <div><div class="field-lab">Friendly robber<small>No stealing from players under 3 points</small></div>${seg('friendlyRobber',[{v:false,l:'Off'},{v:true,l:'On'}],s.friendlyRobber)}</div>
     <div><div class="field-lab">Bots may offer you trades</div>${seg('botTrades',[{v:false,l:'Off'},{v:true,l:'On'}],s.botTrades)}</div>
     <div><div class="field-lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>
-    <div><div class="field-lab">Wild &amp; Wonders<small>Gold Field, volcano, oasis, jungle, swamp + trade post, ruins &amp; monument</small></div>${seg('expWild',[{v:false,l:'Off'},{v:true,l:'On'}],s.expWild)}</div>`;
+    <div><div class="field-lab">Wild &amp; Wonders<small>Gold Field, volcano, oasis, jungle, swamp + trade post, ruins &amp; monument</small></div>${seg('expWild',[{v:false,l:'Off'},{v:true,l:'On'}],s.expWild)}</div>
+    <div><div class="field-lab">Voyages<small>Splits the map into two islands — build ships across the sea (🌲+🐑)</small></div>${seg('expSea',[{v:false,l:'Off'},{v:true,l:'On'}],s.expSea)}</div>`;
   $('setup-body').querySelectorAll('[data-seg]').forEach(g=>{
     g.querySelectorAll('button').forEach(b=>b.onclick=()=>{
       g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
       b.classList.add('on');
       const raw=b.dataset.v, key=g.dataset.seg;
       draft[key]= raw==='true'?true: raw==='false'?false: isNaN(+raw)?raw:+raw;
-      if(key==='bots'||key==='layout'||key==='expWild'||key==='mapSize') reDeal();
+      if(key==='bots'||key==='layout'||key==='expWild'||key==='mapSize'||key==='expSea') reDeal();
     });
   });
   $('set-colors').querySelectorAll('.swatch').forEach(b=>b.onclick=()=>{
@@ -433,6 +435,7 @@ function toggleMode(m){
   if(!S.rolled) return;
   mode = mode===m?null:m;
   if(mode==='road') hint(S.freeRoads>0?`Free roads left: ${S.freeRoads} — tap an edge`:'Tap an edge to build a road');
+  if(mode==='ship') hint('Tap a sea edge to set sail');
   if(mode==='sett') hint('Tap a highlighted corner to build a settlement');
   if(mode==='city') hint('Tap one of your settlements to upgrade');
   if(!mode) hint('Build, trade, or end your turn');
@@ -462,6 +465,11 @@ function onEdgeTap(ek){
       if(!canAfford(p,COST.road)) mode=null;
       renderAll(); winOrContinue(true);
     }
+  }
+  if(mode==='ship'&&shipSpots(S,p).includes(ek)&&p.stock.ship>0&&canAfford(p,COST.ship)){
+    placeShip(S,p,ek,false);
+    if(!canAfford(p,COST.ship)) mode=null;
+    renderAll(); winOrContinue(true);
   }
 }
 function winOrContinue(stayInMode){
@@ -831,6 +839,7 @@ function buildReason(me,kind){
   if(kind==="city"){ if(me.stock.city<=0) return "No city pieces left."; if(!citySpots(S,me).length) return "You have no settlement to upgrade."; return needMsg(me,COST.city); }
   if(kind==="sett"){ if(me.stock.sett<=0) return "No settlement pieces left."; if(!settSpots(S,me,false).length) return "No legal spot — needs an open corner on your roads, two away from any building."; return needMsg(me,COST.sett); }
   if(kind==="road"){ if(me.stock.road<=0) return "No road pieces left."; if(!roadSpots(S,me,null).length) return "No legal spot to extend a road."; if(S.freeRoads>0) return null; return needMsg(me,COST.road); }
+  if(kind==="ship"){ if(!S.hasSea) return "Ships need the Voyages map."; if(me.stock.ship<=0) return "No ship pieces left."; if(!shipSpots(S,me).length) return "No sea route — build a ship from a coast."; return needMsg(me,COST.ship); }
   return null;
 }
 function renderDock(){
@@ -882,6 +891,8 @@ function renderDock(){
   setAct("act-city","city",myTurn?buildReason(me,"city"):"Not your turn.");
   setAct("act-dev","_dev",myTurn?buildReason(me,"dev"):"Not your turn.");
   $("act-dev").querySelector(".cost").innerHTML=S.devDeck.length?costDots(COST.dev):'<span style="color:var(--faint)">Sold out</span>';
+  const shipBtn=$("act-ship");
+  if(shipBtn){ shipBtn.style.display=S.hasSea?"":"none"; if(S.hasSea) setAct("act-ship","ship",myTurn?buildReason(me,"ship"):"Not your turn."); }
 
   const preRoll=myTurn&&S.phase==='play'&&!S.rolled;
   const rollBtn=$('btn-roll');
@@ -902,13 +913,14 @@ function renderPick(){
   if(!S||!p||p.bot){ board.clearPick(); return; }
   const list=[];
   const pushV=(vk)=>{ const v=S.board.V[vk]; const w=toWorld(v.x,v.y); list.push({key:vk,wx:w[0],wz:w[1],wy:0.16,cls:'v'}); };
-  const pushE=(ek)=>{ const e=S.board.E[ek]; const a=S.board.V[e.a],b=S.board.V[e.b]; const wa=toWorld(a.x,a.y),wb=toWorld(b.x,b.y); list.push({key:ek,wx:(wa[0]+wb[0])/2,wz:(wa[1]+wb[1])/2,wy:0.14,cls:'e'}); };
+  const pushE=(ek,cls)=>{ const e=S.board.E[ek]; const a=S.board.V[e.a],b=S.board.V[e.b]; const wa=toWorld(a.x,a.y),wb=toWorld(b.x,b.y); list.push({key:ek,wx:(wa[0]+wb[0])/2,wz:(wa[1]+wb[1])/2,wy:0.14,cls:cls||'e'}); };
   const pushH=(hid)=>{ const h=S.board.hexes[hid]; const w=toWorld(h.x,h.y); list.push({key:hid,wx:w[0],wz:w[1],wy:0.32,cls:'h'}); };
   if(mode==='setup-sett'){ for(const vk of settSpots(S,p,true)) pushV(vk); board.setPick(list,vk=>onVertexTap(vk)); }
   else if(mode==='setup-road'){ for(const ek of roadSpots(S,p,S.lastSetupSett)) pushE(ek); board.setPick(list,ek=>onEdgeTap(ek)); }
   else if(mode==='sett'){ for(const vk of settSpots(S,p,false)) pushV(vk); board.setPick(list,vk=>onVertexTap(vk)); }
   else if(mode==='city'){ for(const vk of citySpots(S,p)) pushV(vk); board.setPick(list,vk=>onVertexTap(vk)); }
   else if(mode==='road'){ for(const ek of roadSpots(S,p,null)) pushE(ek); board.setPick(list,ek=>onEdgeTap(ek)); }
+  else if(mode==='ship'){ for(const ek of shipSpots(S,p)) pushE(ek,'s'); board.setPick(list,ek=>onEdgeTap(ek)); }
   else if(mode==='robber'){ for(const h of S.board.hexes){ if(h.id!==S.board.robber) pushH(h.id); } board.setPick(list,hid=>onHexTap(hid)); }
   else board.clearPick();
 }
@@ -928,5 +940,6 @@ window.addEventListener('DOMContentLoaded',()=>{
   $('act-sett').onclick=()=>toggleMode('sett');
   $('act-city').onclick=()=>toggleMode('city');
   $('act-dev').onclick=onBuyDev;
+  $('act-ship')&&($('act-ship').onclick=()=>toggleMode('ship'));
   boot();
 });

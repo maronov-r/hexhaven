@@ -12,6 +12,7 @@ const RES_META = {
 const DESERT_TILE = '#c9b48a';
 const COST = {
   road:{wood:1,brick:1},
+  ship:{wood:1,sheep:1},
   sett:{wood:1,brick:1,sheep:1,wheat:1},
   city:{wheat:2,ore:3},
   dev:{sheep:1,wheat:1,ore:1},
@@ -51,7 +52,7 @@ function hexCorners(cx,cy){
 const vkey = (x,y)=>Math.round(x)+','+Math.round(y);
 const ekey = (a,b)=> a<b ? a+'|'+b : b+'|'+a;
 
-function buildBoard(layout, radius){
+function buildBoard(layout, radius, sea){
   radius = radius || 2;                        // 2=Standard(19) · 3=Large(37) · 4=Huge(61)
   const hexes=[];
   for(let q=-radius;q<=radius;q++) for(let r=-radius;r<=radius;r++){
@@ -60,7 +61,10 @@ function buildBoard(layout, radius){
       hexes.push({id:hexes.length,q,r,x,y,terrain:null,num:null});
     }
   }
-  const N=hexes.length;
+  // Voyages: the q===0 column becomes a sea channel, splitting the board into two islands
+  if(sea){ for(const h of hexes) if(h.q===0){ h.terrain='sea'; h.num=null; } }
+  const landHexes=hexes.filter(h=>h.terrain!=='sea');
+  const N=landHexes.length;
   // terrain pool — ~1 desert per 19 hexes, resources in the classic 4:4:4:3:3 ratio, scaled
   const deserts=Math.max(1,Math.round(N/19));
   const landN=N-deserts;
@@ -72,13 +76,13 @@ function buildBoard(layout, radius){
   for(const k of RES) for(let i=0;i<counts[k];i++) pool.push(k);
   for(let i=0;i<deserts;i++) pool.push('desert');
   const terr=shuffle(pool);
-  hexes.forEach((h,i)=>h.terrain=terr[i]);
+  landHexes.forEach((h,i)=>h.terrain=terr[i]);
 
   // number placement
   const ring = h => (Math.abs(h.q)+Math.abs(h.r)+Math.abs(h.q+h.r))/2;
   const neighborsOf = h => hexes.filter(o=>o!==h && (Math.abs(o.q-h.q)+Math.abs(o.r-h.r)+Math.abs(o.q+o.r-h.q-h.r))/2===1);
-  const landCount = hexes.filter(h=>h.terrain!=='desert').length;
-  if(layout==='spiral' && radius===2){
+  const landCount = hexes.filter(h=>h.terrain!=='desert'&&h.terrain!=='sea').length;
+  if(layout==='spiral' && radius===2 && !sea){
     // classic variable setup: numbers laid in a spiral, guarantees no adjacent 6/8
     const seq=[5,2,6,3,8,10,9,12,11,4,8,10,9,4,5,6,3,11];
     const byRing=[2,1,0].map(rr=>hexes.filter(h=>ring(h)===rr)
@@ -93,7 +97,7 @@ function buildBoard(layout, radius){
     const makeBag=()=>{ const bag=[]; while(bag.length<landCount) bag.push(...shuffle(base)); return shuffle(bag).slice(0,landCount); };
     for(let attempt=0;attempt<400;attempt++){
       const bag=makeBag(); let k=0;
-      hexes.forEach(h=>{ h.num = h.terrain==='desert'?null:bag[k++]; });
+      hexes.forEach(h=>{ h.num = (h.terrain==='desert'||h.terrain==='sea')?null:bag[k++]; });
       if(layout!=='balanced') break;
       const bad = hexes.some(h=>(h.num===6||h.num===8) && neighborsOf(h).some(n=>n.num===6||n.num===8));
       if(!bad) break;
@@ -112,7 +116,7 @@ function buildBoard(layout, radius){
     });
     for(let i=0;i<6;i++){
       const a=keys[i], b=keys[(i+1)%6], ek=ekey(a,b);
-      if(!E[ek]) E[ek]={k:ek,a,b,hexes:[],road:null};
+      if(!E[ek]) E[ek]={k:ek,a,b,hexes:[],road:null,ship:null};
       E[ek].hexes.push(h.id);
     }
   }
@@ -122,8 +126,8 @@ function buildBoard(layout, radius){
     V[e.a].edges.push(e.k); V[e.b].edges.push(e.k);
   }
 
-  // ports: walk the coastal edge cycle, drop 9 harbors around it
-  const coast = Object.values(E).filter(e=>e.hexes.length===1);
+  // ports: walk the coastal edge cycle, drop harbours around it (land coast only)
+  const coast = Object.values(E).filter(e=>e.hexes.length===1 && hexes[e.hexes[0]].terrain!=='sea');
   const chain=[coast[0]]; const used=new Set([coast[0].k]);
   while(chain.length<coast.length){
     const last=chain[chain.length-1];
@@ -165,7 +169,7 @@ function newGame(settings){
   for(const p of players){
     p.res={wood:0,brick:0,sheep:0,wheat:0,ore:0};
     p.dev=[]; p.newdev=[]; p.knights=0; p.devVp=0;
-    p.stock={road:15,sett:5,city:4};
+    p.stock={road:15,sett:5,city:4,ship:15};
     p.playedDevThisTurn=false;
   }
   const devDeck=shuffle([
@@ -174,7 +178,7 @@ function newGame(settings){
   ]);
   const order = shuffle(players.map(p=>p.i));
   const S={
-    settings, players, board:buildBoard(settings.layout, settings.mapSize),
+    settings, players, board:buildBoard(settings.layout, settings.mapSize, settings.expSea),
     bank:{wood:bankN,brick:bankN,sheep:bankN,wheat:bankN,ore:bankN}, devDeck,
     order, turnPtr:0,
     phase:'setup',
@@ -185,6 +189,7 @@ function newGame(settings){
     discardQueue:[], pendingSteal:null, freeRoads:0,
     winner:null, log:[],
   };
+  if(settings.expSea) S.hasSea=true;
   if(settings.expWild) applyWildExpansion(S);
   return S;
 }
@@ -241,9 +246,10 @@ function settSpots(S,p,setup){
   for(const v of Object.values(S.board.V)){
     if(v.bld) continue;
     if(v.adj.some(k=>S.board.V[k].bld)) continue; // distance rule
+    if(S.hasSea && !v.hexes.some(hid=>S.board.hexes[hid].terrain!=='sea')) continue; // no open-ocean settlements
     if(!setup){
-      const ownRoad=v.edges.some(ek=>S.board.E[ek].road===p.i);
-      if(!ownRoad) continue;
+      const connected=v.edges.some(ek=>S.board.E[ek].road===p.i||S.board.E[ek].ship===p.i);
+      if(!connected) continue;
     }
     out.push(v.k);
   }
@@ -253,12 +259,32 @@ function roadSpots(S,p,fromVertex){
   const out=[];
   for(const e of Object.values(S.board.E)){
     if(e.road!==null) continue;
+    if(S.hasSea && edgeLand(S,e)<1) continue;   // roads need a land side
     if(fromVertex){ if(e.a===fromVertex||e.b===fromVertex) out.push(e.k); continue; }
     for(const end of [e.a,e.b]){
       const v=S.board.V[end];
       if(v.bld && v.bld.p===p.i){ out.push(e.k); break; }
       if(v.bld && v.bld.p!==p.i) continue; // cannot build through opponent building
       if(v.edges.some(k=>S.board.E[k].road===p.i)){ out.push(e.k); break; }
+    }
+  }
+  return [...new Set(out)];
+}
+// Voyages edge classification
+function edgeLand(S,e){ return e.hexes.filter(h=>S.board.hexes[h].terrain!=='sea').length; }
+function edgeSea(S,e){ return e.hexes.filter(h=>S.board.hexes[h].terrain==='sea').length + (2-e.hexes.length); }
+// legal ship placements: sea-bordering empty edges connected to your network
+function shipSpots(S,p){
+  if(!S.hasSea) return [];
+  const out=[];
+  for(const e of Object.values(S.board.E)){
+    if(e.ship!=null||e.road!=null) continue;
+    if(edgeSea(S,e)<1) continue;
+    for(const end of [e.a,e.b]){
+      const v=S.board.V[end];
+      if(v.bld&&v.bld.p===p.i){ out.push(e.k); break; }
+      if(v.bld&&v.bld.p!==p.i) continue;
+      if(v.edges.some(k=>S.board.E[k].ship===p.i||S.board.E[k].road===p.i)){ out.push(e.k); break; }
     }
   }
   return [...new Set(out)];
@@ -309,6 +335,13 @@ function placeRoad(S,p,ek,free){
   if(!free) pay(S,p,COST.road);
   recomputeLongestRoad(S);
   log(S,`<b>${p.name}</b> built a road`);
+}
+function placeShip(S,p,ek,free){
+  S.board.E[ek].ship=p.i;
+  p.stock.ship--;
+  if(!free) pay(S,p,COST.ship);
+  recomputeLongestRoad(S);
+  log(S,`<b>${p.name}</b> set sail — built a ship`);
 }
 function grantSetupResources(S,p,vk){
   for(const hid of S.board.V[vk].hexes){
@@ -494,15 +527,15 @@ function recomputeLongestRoad(S){
 }
 function longestRoadOf(S,pi){
   const E=S.board.E,V=S.board.V;
-  const mine=Object.values(E).filter(e=>e.road===pi);
+  const mine=Object.values(E).filter(e=>e.road===pi||e.ship===pi);   // ships count toward the route
   let best=0;
   const walk=(vk,used,len)=>{
     best=Math.max(best,len);
     const v=V[vk];
-    if(v.bld&&v.bld.p!==pi) return; // opponent building breaks the road
+    if(v.bld&&v.bld.p!==pi) return; // opponent building breaks the route
     for(const ek2 of v.edges){
       const e2=E[ek2];
-      if(e2.road!==pi||used.has(ek2)) continue;
+      if((e2.road!==pi&&e2.ship!==pi)||used.has(ek2)) continue;
       used.add(ek2);
       walk(e2.a===vk?e2.b:e2.a,used,len+1);
       used.delete(ek2);
@@ -650,6 +683,20 @@ function botStep(S,p){
       const vk=spots.reduce((a,b)=>vertexScore(S,a,p)>=vertexScore(S,b,p)?a:b);
       placeSett(S,p,vk,false); return {type:'sett',vk};
     }
+  }
+  // 3b) Voyages: sail a ship toward an open land vertex on another shore
+  if(S.hasSea&&canAfford(p,COST.ship)&&p.stock.ship>0&&p.stock.sett>0){
+    const sopts=shipSpots(S,p);
+    let sbest=null,sbs=1.2;
+    for(const ek of sopts){ const e=S.board.E[ek];
+      for(const end of [e.a,e.b]){ const v=S.board.V[end];
+        if(!v.bld&&!v.adj.some(k=>S.board.V[k].bld)&&v.hexes.some(hid=>S.board.hexes[hid].terrain!=='sea')){
+          const s=vertexScore(S,end,p); if(s>sbs){sbs=s;sbest=ek;}
+        }
+      }
+      if(!sbest&&Math.random()<0.15) sbest=ek;   // occasionally extend a route outward
+    }
+    if(sbest){ placeShip(S,p,sbest,false); return {type:'ship'}; }
   }
   // 3) road toward a good expansion (only if a sett is still worth chasing)
   if(canAfford(p,COST.road)&&p.stock.road>0&&p.stock.sett>0){

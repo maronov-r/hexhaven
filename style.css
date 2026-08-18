@@ -217,6 +217,7 @@ input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-r
 .hb-pick{position:absolute;left:0;top:0;padding:0;border:0;background:transparent;cursor:pointer}
 .hb-pick-v{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ffe6ad,#e0b15e);animation:hb-mark 1.4s infinite}
 .hb-pick-e{width:30px;height:15px;border-radius:8px;background:rgba(224,177,94,.5);border:1.5px solid var(--brass);animation:hb-mark 1.4s infinite}
+.hb-pick-s{width:30px;height:15px;border-radius:8px;background:rgba(63,169,255,.5);border:1.5px solid #3fa9ff;animation:hb-mark 1.4s infinite}
 .hb-pick-h{width:46px;height:46px;border-radius:50%;background:rgba(224,80,80,.2);border:2px dashed rgba(255,130,130,.85);animation:hb-mark 1.4s infinite}
 .hb-pick-v:hover,.hb-pick-e:hover,.hb-pick-h:hover{filter:brightness(1.18)}
 

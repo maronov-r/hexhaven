@@ -94,6 +94,7 @@
         <button class="act" id="act-sett"><span class="ic" data-ico="house"></span><span class="al">Settle</span><span class="cost" data-cost="sett"></span></button>
         <button class="act" id="act-city"><span class="ic" data-ico="city"></span><span class="al">City</span><span class="cost" data-cost="city"></span></button>
         <button class="act" id="act-dev"><span class="ic" data-ico="scroll"></span><span class="al">Dev card</span><span class="cost" data-cost="dev"></span></button>
+        <button class="act" id="act-ship" style="display:none"><span class="ic" data-ico="ship"></span><span class="al">Ship</span><span class="cost" data-cost="ship"></span></button>
       </div>
     </div>
     <div class="dock-foot">
@@ -328,6 +329,7 @@ input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-r
 .hb-pick{position:absolute;left:0;top:0;padding:0;border:0;background:transparent;cursor:pointer}
 .hb-pick-v{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ffe6ad,#e0b15e);animation:hb-mark 1.4s infinite}
 .hb-pick-e{width:30px;height:15px;border-radius:8px;background:rgba(224,177,94,.5);border:1.5px solid var(--brass);animation:hb-mark 1.4s infinite}
+.hb-pick-s{width:30px;height:15px;border-radius:8px;background:rgba(63,169,255,.5);border:1.5px solid #3fa9ff;animation:hb-mark 1.4s infinite}
 .hb-pick-h{width:46px;height:46px;border-radius:50%;background:rgba(224,80,80,.2);border:2px dashed rgba(255,130,130,.85);animation:hb-mark 1.4s infinite}
 .hb-pick-v:hover,.hb-pick-e:hover,.hb-pick-h:hover{filter:brightness(1.18)}
 
@@ -481,6 +483,7 @@ const RES_META = {
 const DESERT_TILE = '#c9b48a';
 const COST = {
   road:{wood:1,brick:1},
+  ship:{wood:1,sheep:1},
   sett:{wood:1,brick:1,sheep:1,wheat:1},
   city:{wheat:2,ore:3},
   dev:{sheep:1,wheat:1,ore:1},
@@ -520,7 +523,7 @@ function hexCorners(cx,cy){
 const vkey = (x,y)=>Math.round(x)+','+Math.round(y);
 const ekey = (a,b)=> a<b ? a+'|'+b : b+'|'+a;
 
-function buildBoard(layout, radius){
+function buildBoard(layout, radius, sea){
   radius = radius || 2;                        // 2=Standard(19) · 3=Large(37) · 4=Huge(61)
   const hexes=[];
   for(let q=-radius;q<=radius;q++) for(let r=-radius;r<=radius;r++){
@@ -529,7 +532,10 @@ function buildBoard(layout, radius){
       hexes.push({id:hexes.length,q,r,x,y,terrain:null,num:null});
     }
   }
-  const N=hexes.length;
+  // Voyages: the q===0 column becomes a sea channel, splitting the board into two islands
+  if(sea){ for(const h of hexes) if(h.q===0){ h.terrain='sea'; h.num=null; } }
+  const landHexes=hexes.filter(h=>h.terrain!=='sea');
+  const N=landHexes.length;
   // terrain pool — ~1 desert per 19 hexes, resources in the classic 4:4:4:3:3 ratio, scaled
   const deserts=Math.max(1,Math.round(N/19));
   const landN=N-deserts;
@@ -541,13 +547,13 @@ function buildBoard(layout, radius){
   for(const k of RES) for(let i=0;i<counts[k];i++) pool.push(k);
   for(let i=0;i<deserts;i++) pool.push('desert');
   const terr=shuffle(pool);
-  hexes.forEach((h,i)=>h.terrain=terr[i]);
+  landHexes.forEach((h,i)=>h.terrain=terr[i]);
 
   // number placement
   const ring = h => (Math.abs(h.q)+Math.abs(h.r)+Math.abs(h.q+h.r))/2;
   const neighborsOf = h => hexes.filter(o=>o!==h && (Math.abs(o.q-h.q)+Math.abs(o.r-h.r)+Math.abs(o.q+o.r-h.q-h.r))/2===1);
-  const landCount = hexes.filter(h=>h.terrain!=='desert').length;
-  if(layout==='spiral' && radius===2){
+  const landCount = hexes.filter(h=>h.terrain!=='desert'&&h.terrain!=='sea').length;
+  if(layout==='spiral' && radius===2 && !sea){
     // classic variable setup: numbers laid in a spiral, guarantees no adjacent 6/8
     const seq=[5,2,6,3,8,10,9,12,11,4,8,10,9,4,5,6,3,11];
     const byRing=[2,1,0].map(rr=>hexes.filter(h=>ring(h)===rr)
@@ -562,7 +568,7 @@ function buildBoard(layout, radius){
     const makeBag=()=>{ const bag=[]; while(bag.length<landCount) bag.push(...shuffle(base)); return shuffle(bag).slice(0,landCount); };
     for(let attempt=0;attempt<400;attempt++){
       const bag=makeBag(); let k=0;
-      hexes.forEach(h=>{ h.num = h.terrain==='desert'?null:bag[k++]; });
+      hexes.forEach(h=>{ h.num = (h.terrain==='desert'||h.terrain==='sea')?null:bag[k++]; });
       if(layout!=='balanced') break;
       const bad = hexes.some(h=>(h.num===6||h.num===8) && neighborsOf(h).some(n=>n.num===6||n.num===8));
       if(!bad) break;
@@ -581,7 +587,7 @@ function buildBoard(layout, radius){
     });
     for(let i=0;i<6;i++){
       const a=keys[i], b=keys[(i+1)%6], ek=ekey(a,b);
-      if(!E[ek]) E[ek]={k:ek,a,b,hexes:[],road:null};
+      if(!E[ek]) E[ek]={k:ek,a,b,hexes:[],road:null,ship:null};
       E[ek].hexes.push(h.id);
     }
   }
@@ -591,8 +597,8 @@ function buildBoard(layout, radius){
     V[e.a].edges.push(e.k); V[e.b].edges.push(e.k);
   }
 
-  // ports: walk the coastal edge cycle, drop 9 harbors around it
-  const coast = Object.values(E).filter(e=>e.hexes.length===1);
+  // ports: walk the coastal edge cycle, drop harbours around it (land coast only)
+  const coast = Object.values(E).filter(e=>e.hexes.length===1 && hexes[e.hexes[0]].terrain!=='sea');
   const chain=[coast[0]]; const used=new Set([coast[0].k]);
   while(chain.length<coast.length){
     const last=chain[chain.length-1];
@@ -634,7 +640,7 @@ function newGame(settings){
   for(const p of players){
     p.res={wood:0,brick:0,sheep:0,wheat:0,ore:0};
     p.dev=[]; p.newdev=[]; p.knights=0; p.devVp=0;
-    p.stock={road:15,sett:5,city:4};
+    p.stock={road:15,sett:5,city:4,ship:15};
     p.playedDevThisTurn=false;
   }
   const devDeck=shuffle([
@@ -643,7 +649,7 @@ function newGame(settings){
   ]);
   const order = shuffle(players.map(p=>p.i));
   const S={
-    settings, players, board:buildBoard(settings.layout, settings.mapSize),
+    settings, players, board:buildBoard(settings.layout, settings.mapSize, settings.expSea),
     bank:{wood:bankN,brick:bankN,sheep:bankN,wheat:bankN,ore:bankN}, devDeck,
     order, turnPtr:0,
     phase:'setup',
@@ -654,6 +660,7 @@ function newGame(settings){
     discardQueue:[], pendingSteal:null, freeRoads:0,
     winner:null, log:[],
   };
+  if(settings.expSea) S.hasSea=true;
   if(settings.expWild) applyWildExpansion(S);
   return S;
 }
@@ -710,9 +717,10 @@ function settSpots(S,p,setup){
   for(const v of Object.values(S.board.V)){
     if(v.bld) continue;
     if(v.adj.some(k=>S.board.V[k].bld)) continue; // distance rule
+    if(S.hasSea && !v.hexes.some(hid=>S.board.hexes[hid].terrain!=='sea')) continue; // no open-ocean settlements
     if(!setup){
-      const ownRoad=v.edges.some(ek=>S.board.E[ek].road===p.i);
-      if(!ownRoad) continue;
+      const connected=v.edges.some(ek=>S.board.E[ek].road===p.i||S.board.E[ek].ship===p.i);
+      if(!connected) continue;
     }
     out.push(v.k);
   }
@@ -722,12 +730,32 @@ function roadSpots(S,p,fromVertex){
   const out=[];
   for(const e of Object.values(S.board.E)){
     if(e.road!==null) continue;
+    if(S.hasSea && edgeLand(S,e)<1) continue;   // roads need a land side
     if(fromVertex){ if(e.a===fromVertex||e.b===fromVertex) out.push(e.k); continue; }
     for(const end of [e.a,e.b]){
       const v=S.board.V[end];
       if(v.bld && v.bld.p===p.i){ out.push(e.k); break; }
       if(v.bld && v.bld.p!==p.i) continue; // cannot build through opponent building
       if(v.edges.some(k=>S.board.E[k].road===p.i)){ out.push(e.k); break; }
+    }
+  }
+  return [...new Set(out)];
+}
+// Voyages edge classification
+function edgeLand(S,e){ return e.hexes.filter(h=>S.board.hexes[h].terrain!=='sea').length; }
+function edgeSea(S,e){ return e.hexes.filter(h=>S.board.hexes[h].terrain==='sea').length + (2-e.hexes.length); }
+// legal ship placements: sea-bordering empty edges connected to your network
+function shipSpots(S,p){
+  if(!S.hasSea) return [];
+  const out=[];
+  for(const e of Object.values(S.board.E)){
+    if(e.ship!=null||e.road!=null) continue;
+    if(edgeSea(S,e)<1) continue;
+    for(const end of [e.a,e.b]){
+      const v=S.board.V[end];
+      if(v.bld&&v.bld.p===p.i){ out.push(e.k); break; }
+      if(v.bld&&v.bld.p!==p.i) continue;
+      if(v.edges.some(k=>S.board.E[k].ship===p.i||S.board.E[k].road===p.i)){ out.push(e.k); break; }
     }
   }
   return [...new Set(out)];
@@ -778,6 +806,13 @@ function placeRoad(S,p,ek,free){
   if(!free) pay(S,p,COST.road);
   recomputeLongestRoad(S);
   log(S,`<b>${p.name}</b> built a road`);
+}
+function placeShip(S,p,ek,free){
+  S.board.E[ek].ship=p.i;
+  p.stock.ship--;
+  if(!free) pay(S,p,COST.ship);
+  recomputeLongestRoad(S);
+  log(S,`<b>${p.name}</b> set sail — built a ship`);
 }
 function grantSetupResources(S,p,vk){
   for(const hid of S.board.V[vk].hexes){
@@ -963,15 +998,15 @@ function recomputeLongestRoad(S){
 }
 function longestRoadOf(S,pi){
   const E=S.board.E,V=S.board.V;
-  const mine=Object.values(E).filter(e=>e.road===pi);
+  const mine=Object.values(E).filter(e=>e.road===pi||e.ship===pi);   // ships count toward the route
   let best=0;
   const walk=(vk,used,len)=>{
     best=Math.max(best,len);
     const v=V[vk];
-    if(v.bld&&v.bld.p!==pi) return; // opponent building breaks the road
+    if(v.bld&&v.bld.p!==pi) return; // opponent building breaks the route
     for(const ek2 of v.edges){
       const e2=E[ek2];
-      if(e2.road!==pi||used.has(ek2)) continue;
+      if((e2.road!==pi&&e2.ship!==pi)||used.has(ek2)) continue;
       used.add(ek2);
       walk(e2.a===vk?e2.b:e2.a,used,len+1);
       used.delete(ek2);
@@ -1120,6 +1155,20 @@ function botStep(S,p){
       placeSett(S,p,vk,false); return {type:'sett',vk};
     }
   }
+  // 3b) Voyages: sail a ship toward an open land vertex on another shore
+  if(S.hasSea&&canAfford(p,COST.ship)&&p.stock.ship>0&&p.stock.sett>0){
+    const sopts=shipSpots(S,p);
+    let sbest=null,sbs=1.2;
+    for(const ek of sopts){ const e=S.board.E[ek];
+      for(const end of [e.a,e.b]){ const v=S.board.V[end];
+        if(!v.bld&&!v.adj.some(k=>S.board.V[k].bld)&&v.hexes.some(hid=>S.board.hexes[hid].terrain!=='sea')){
+          const s=vertexScore(S,end,p); if(s>sbs){sbs=s;sbest=ek;}
+        }
+      }
+      if(!sbest&&Math.random()<0.15) sbest=ek;   // occasionally extend a route outward
+    }
+    if(sbest){ placeShip(S,p,sbest,false); return {type:'ship'}; }
+  }
   // 3) road toward a good expansion (only if a sett is still worth chasing)
   if(canAfford(p,COST.road)&&p.stock.road>0&&p.stock.sett>0){
     const opts=roadSpots(S,p,null);
@@ -1229,6 +1278,7 @@ const ICONS={
   gift:'<rect x="-8" y="-3" width="16" height="11" rx="1.5"/><path d="M0 -3 V8 M-8 -3 H8 M0 -3 C -6 -3 -6 -9 -2 -8 C 1 -7 0 -4 0 -3 C 0 -4 -1 -7 2 -8 C 6 -9 6 -3 0 -3"/>',
   gear:'<circle cx="0" cy="0" r="3.4"/><path d="M0 -9 V-6 M0 6 V9 M-9 0 H-6 M6 0 H9 M-6.4 -6.4 L-4.2 -4.2 M4.2 4.2 L6.4 6.4 M-6.4 6.4 L-4.2 4.2 M4.2 -4.2 L6.4 -6.4"/>',
   menu:'<path d="M-8 -5 H8 M-8 0 H8 M-8 5 H8"/>',
+  ship:'<path d="M-8 4 L8 4 L5 9 L-5 9 Z"/><path d="M0 4 L0 -8 L6 -1 L0 0"/>',
   coins:'<circle cx="-3" cy="-3" r="5.5"/><path d="M2 -1 a5.5 5.5 0 1 1 -7 7"/>',
   rosette:'<circle cx="0" cy="0" r="5"/><path d="M0 -5 V-9 M0 5 V9 M-5 0 H-9 M5 0 H9 M-3.5 -3.5 L-6.4 -6.4 M3.5 3.5 L6.4 6.4 M-3.5 3.5 L-6.4 6.4 M3.5 -3.5 L6.4 -6.4"/>',
   flag:'<path d="M-6 9 V-9 M-6 -8 H7 L3 -4 L7 0 H-6"/>',
@@ -1245,7 +1295,7 @@ const SAVE_KEY='hexhaven-save-v1', SET_KEY='hexhaven-settings-v1';
 const DEFAULT_SETTINGS={
   name:'You', colorIdx:0, bots:3, difficulty:'standard', target:10,
   layout:'spiral', friendlyRobber:false, botTrades:true, speed:'normal',
-  expWild:false, mapSize:2,
+  expWild:false, mapSize:2, expSea:false,
 };
 let settings=loadSettings();
 let S=null;            // game state
@@ -1392,14 +1442,15 @@ function renderSetup(){
     <div><div class="field-lab">Friendly robber<small>No stealing from players under 3 points</small></div>${seg('friendlyRobber',[{v:false,l:'Off'},{v:true,l:'On'}],s.friendlyRobber)}</div>
     <div><div class="field-lab">Bots may offer you trades</div>${seg('botTrades',[{v:false,l:'Off'},{v:true,l:'On'}],s.botTrades)}</div>
     <div><div class="field-lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>
-    <div><div class="field-lab">Wild &amp; Wonders<small>Gold Field, volcano, oasis, jungle, swamp + trade post, ruins &amp; monument</small></div>${seg('expWild',[{v:false,l:'Off'},{v:true,l:'On'}],s.expWild)}</div>`;
+    <div><div class="field-lab">Wild &amp; Wonders<small>Gold Field, volcano, oasis, jungle, swamp + trade post, ruins &amp; monument</small></div>${seg('expWild',[{v:false,l:'Off'},{v:true,l:'On'}],s.expWild)}</div>
+    <div><div class="field-lab">Voyages<small>Splits the map into two islands — build ships across the sea (🌲+🐑)</small></div>${seg('expSea',[{v:false,l:'Off'},{v:true,l:'On'}],s.expSea)}</div>`;
   $('setup-body').querySelectorAll('[data-seg]').forEach(g=>{
     g.querySelectorAll('button').forEach(b=>b.onclick=()=>{
       g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
       b.classList.add('on');
       const raw=b.dataset.v, key=g.dataset.seg;
       draft[key]= raw==='true'?true: raw==='false'?false: isNaN(+raw)?raw:+raw;
-      if(key==='bots'||key==='layout'||key==='expWild'||key==='mapSize') reDeal();
+      if(key==='bots'||key==='layout'||key==='expWild'||key==='mapSize'||key==='expSea') reDeal();
     });
   });
   $('set-colors').querySelectorAll('.swatch').forEach(b=>b.onclick=()=>{
@@ -1646,6 +1697,7 @@ function toggleMode(m){
   if(!S.rolled) return;
   mode = mode===m?null:m;
   if(mode==='road') hint(S.freeRoads>0?`Free roads left: ${S.freeRoads} — tap an edge`:'Tap an edge to build a road');
+  if(mode==='ship') hint('Tap a sea edge to set sail');
   if(mode==='sett') hint('Tap a highlighted corner to build a settlement');
   if(mode==='city') hint('Tap one of your settlements to upgrade');
   if(!mode) hint('Build, trade, or end your turn');
@@ -1675,6 +1727,11 @@ function onEdgeTap(ek){
       if(!canAfford(p,COST.road)) mode=null;
       renderAll(); winOrContinue(true);
     }
+  }
+  if(mode==='ship'&&shipSpots(S,p).includes(ek)&&p.stock.ship>0&&canAfford(p,COST.ship)){
+    placeShip(S,p,ek,false);
+    if(!canAfford(p,COST.ship)) mode=null;
+    renderAll(); winOrContinue(true);
   }
 }
 function winOrContinue(stayInMode){
@@ -2044,6 +2101,7 @@ function buildReason(me,kind){
   if(kind==="city"){ if(me.stock.city<=0) return "No city pieces left."; if(!citySpots(S,me).length) return "You have no settlement to upgrade."; return needMsg(me,COST.city); }
   if(kind==="sett"){ if(me.stock.sett<=0) return "No settlement pieces left."; if(!settSpots(S,me,false).length) return "No legal spot — needs an open corner on your roads, two away from any building."; return needMsg(me,COST.sett); }
   if(kind==="road"){ if(me.stock.road<=0) return "No road pieces left."; if(!roadSpots(S,me,null).length) return "No legal spot to extend a road."; if(S.freeRoads>0) return null; return needMsg(me,COST.road); }
+  if(kind==="ship"){ if(!S.hasSea) return "Ships need the Voyages map."; if(me.stock.ship<=0) return "No ship pieces left."; if(!shipSpots(S,me).length) return "No sea route — build a ship from a coast."; return needMsg(me,COST.ship); }
   return null;
 }
 function renderDock(){
@@ -2095,6 +2153,8 @@ function renderDock(){
   setAct("act-city","city",myTurn?buildReason(me,"city"):"Not your turn.");
   setAct("act-dev","_dev",myTurn?buildReason(me,"dev"):"Not your turn.");
   $("act-dev").querySelector(".cost").innerHTML=S.devDeck.length?costDots(COST.dev):'<span style="color:var(--faint)">Sold out</span>';
+  const shipBtn=$("act-ship");
+  if(shipBtn){ shipBtn.style.display=S.hasSea?"":"none"; if(S.hasSea) setAct("act-ship","ship",myTurn?buildReason(me,"ship"):"Not your turn."); }
 
   const preRoll=myTurn&&S.phase==='play'&&!S.rolled;
   const rollBtn=$('btn-roll');
@@ -2115,13 +2175,14 @@ function renderPick(){
   if(!S||!p||p.bot){ board.clearPick(); return; }
   const list=[];
   const pushV=(vk)=>{ const v=S.board.V[vk]; const w=toWorld(v.x,v.y); list.push({key:vk,wx:w[0],wz:w[1],wy:0.16,cls:'v'}); };
-  const pushE=(ek)=>{ const e=S.board.E[ek]; const a=S.board.V[e.a],b=S.board.V[e.b]; const wa=toWorld(a.x,a.y),wb=toWorld(b.x,b.y); list.push({key:ek,wx:(wa[0]+wb[0])/2,wz:(wa[1]+wb[1])/2,wy:0.14,cls:'e'}); };
+  const pushE=(ek,cls)=>{ const e=S.board.E[ek]; const a=S.board.V[e.a],b=S.board.V[e.b]; const wa=toWorld(a.x,a.y),wb=toWorld(b.x,b.y); list.push({key:ek,wx:(wa[0]+wb[0])/2,wz:(wa[1]+wb[1])/2,wy:0.14,cls:cls||'e'}); };
   const pushH=(hid)=>{ const h=S.board.hexes[hid]; const w=toWorld(h.x,h.y); list.push({key:hid,wx:w[0],wz:w[1],wy:0.32,cls:'h'}); };
   if(mode==='setup-sett'){ for(const vk of settSpots(S,p,true)) pushV(vk); board.setPick(list,vk=>onVertexTap(vk)); }
   else if(mode==='setup-road'){ for(const ek of roadSpots(S,p,S.lastSetupSett)) pushE(ek); board.setPick(list,ek=>onEdgeTap(ek)); }
   else if(mode==='sett'){ for(const vk of settSpots(S,p,false)) pushV(vk); board.setPick(list,vk=>onVertexTap(vk)); }
   else if(mode==='city'){ for(const vk of citySpots(S,p)) pushV(vk); board.setPick(list,vk=>onVertexTap(vk)); }
   else if(mode==='road'){ for(const ek of roadSpots(S,p,null)) pushE(ek); board.setPick(list,ek=>onEdgeTap(ek)); }
+  else if(mode==='ship'){ for(const ek of shipSpots(S,p)) pushE(ek,'s'); board.setPick(list,ek=>onEdgeTap(ek)); }
   else if(mode==='robber'){ for(const h of S.board.hexes){ if(h.id!==S.board.robber) pushH(h.id); } board.setPick(list,hid=>onHexTap(hid)); }
   else board.clearPick();
 }
@@ -2141,6 +2202,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   $('act-sett').onclick=()=>toggleMode('sett');
   $('act-city').onclick=()=>toggleMode('city');
   $('act-dev').onclick=onBuyDev;
+  $('act-ship')&&($('act-ship').onclick=()=>toggleMode('ship'));
   boot();
 });
 </script>

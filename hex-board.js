@@ -7,11 +7,12 @@ import * as THREE from 'https://unpkg.com/three@0.184.0/build/three.module.js';
 import { buildTile } from './export/tiles3d.js';
 import { buildExpansionTile, EXPANSION_KINDS, registerExpansionLife, stepExpansionLife } from './export/tiles3d.expansion.js';
 import { buildPiece, ROBBER_COLOR } from './export/pieces3d.js';
+import { buildExpansionPiece } from './export/pieces3d.expansion.js';
 
 const R = 0.5, SC = 1.02, STEP = Math.PI / 3, TOPY = 0.09;
 const HEX_SIZE = 56;                    // game.js board units
 const K = (R * SC) / HEX_SIZE;          // game px → world units
-const KIND = { wood: 'forest', brick: 'hills', sheep: 'pasture', wheat: 'fields', ore: 'mountains', desert: 'desert' };
+const KIND = { wood: 'forest', brick: 'hills', sheep: 'pasture', wheat: 'fields', ore: 'mountains', desert: 'desert', sea: 'sea' };
 const NEIGHBOURS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
 // the engine's flat player colours → their neon-glow equivalents
 const NEON = { '#e0555a': 0xff4d5e, '#4c9ee3': 0x3fa9ff, '#e8e4d8': 0xf2f0e6, '#e58f3c': 0xffa32e };
@@ -244,6 +245,17 @@ class HexBoard extends HTMLElement {
       const [ax, az] = toWorld(a.x, a.y), [bx, bz] = toWorld(b.x, b.y);
       this._addPiece('road', neon(S.players[e.road].color), (ax + bx) / 2, (az + bz) / 2,
         Math.atan2(-(bz - az), bx - ax));
+    }
+    // Voyages ships ride the sea edges
+    for (const e of Object.values(S.board.E)) {
+      if (e.ship === null || e.ship === undefined) continue;
+      const a = S.board.V[e.a], b = S.board.V[e.b];
+      const [ax, az] = toWorld(a.x, a.y), [bx, bz] = toWorld(b.x, b.y);
+      const s = buildExpansionPiece(THREE, 'ship', { color: neon(S.players[e.ship].color) });
+      s.position.set((ax + bx) / 2, TOPY, (az + bz) / 2);
+      s.rotation.y = Math.atan2(-(bz - az), bx - ax);
+      s.traverse(o => { if (o.isMesh && !o.name.endsWith('_glow')) { o.castShadow = true; o.receiveShadow = true; } });
+      this._pieces.add(s);
     }
 
     const rh = S.board.hexes[S.board.robber];
