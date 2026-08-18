@@ -165,7 +165,25 @@ function newGame(settings){
     discardQueue:[], pendingSteal:null, freeRoads:0,
     winner:null, log:[],
   };
+  if(settings.expWild) applyWildExpansion(S);
   return S;
+}
+
+/* ---------- expansion: wild terrains (guarded by settings.expWild) ---------- */
+// A hex names its 3D model via h.art while the engine keeps paying out on h.terrain.
+// 'gold' is a real new terrain (pays a wild); 'jungle' is art-only over wood (pays lumber).
+function applyWildExpansion(S){
+  const pick=a=>a[Math.floor(Math.random()*a.length)];
+  const goldCands=S.board.hexes.filter(h=>h.num&&h.terrain!=='desert'&&h.num!==6&&h.num!==8);
+  if(goldCands.length){ const g=pick(goldCands); g.terrain='gold'; g.art='gold'; }
+  const forests=S.board.hexes.filter(h=>h.terrain==='wood'&&!h.art);
+  if(forests.length){ pick(forests).art='jungle'; }
+}
+// least-held resource the bank can still pay (used for Gold Field's wild payout)
+function neediestResource(S,pl){
+  let best=null,bv=Infinity;
+  for(const r of RES){ if(S.bank[r]<=0) continue; if(pl.res[r]<bv){ bv=pl.res[r]; best=r; } }
+  return best;
 }
 const curP = S => S.phase==='setup' ? S.players[S.setupQueue[0]] : S.players[S.order[S.turnPtr]];
 
@@ -274,10 +292,15 @@ function rollDice(S){
 }
 function distribute(S,total){
   const gains=S.players.map(()=>({wood:0,brick:0,sheep:0,wheat:0,ore:0}));
+  const gold={};
   for(const h of S.board.hexes){
     if(h.num!==total || h.id===S.board.robber) continue;
-    const res=h.terrain;
     const cs=hexCorners(h.x,h.y);
+    if(h.terrain==='gold'){
+      for(const [x,y] of cs){ const v=S.board.V[vkey(x,y)]; if(v&&v.bld) gold[v.bld.p]=(gold[v.bld.p]||0)+(v.bld.type==='city'?2:1); }
+      continue;
+    }
+    const res=h.terrain;
     for(const [x,y] of cs){
       const v=S.board.V[vkey(x,y)];
       if(v&&v.bld) gains[v.bld.p][res]+= v.bld.type==='city'?2:1;
@@ -299,6 +322,12 @@ function distribute(S,total){
   for(const [pi,g] of gains.entries()){
     const parts=RES.filter(r=>g[r]>0).map(r=>`+${g[r]} ${RES_META[r].label}`);
     if(parts.length) log(S,`<b>${S.players[pi].name}</b> ${parts.join(', ')}`);
+  }
+  // Gold Field pays a wild — each affected player auto-takes their neediest from the bank
+  for(const pi of Object.keys(gold)){
+    const pl=S.players[pi]; let got=0;
+    for(let k=0;k<gold[pi];k++){ const r=neediestResource(S,pl); if(r){ S.bank[r]--; pl.res[r]++; gains[pi][r]++; got++; } }
+    if(got) log(S,`<b>${pl.name}</b> struck gold (+${got})`);
   }
 }
 
@@ -449,6 +478,7 @@ function vertexScore(S,vk,p){
     if(h.num){ pips+=PIPS[h.num]; kinds.add(h.terrain); }
   }
   let s=pips + kinds.size*0.8;
+  if(v.hexes.some(hid=>S.board.hexes[hid].terrain==='gold')) s+=1.6;   // Gold Fields are prime
   if(v.port==='any') s+=0.7; else if(v.port) s+=1.0;
   // diversity vs what the bot already produces
   if(p){

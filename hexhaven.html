@@ -634,7 +634,25 @@ function newGame(settings){
     discardQueue:[], pendingSteal:null, freeRoads:0,
     winner:null, log:[],
   };
+  if(settings.expWild) applyWildExpansion(S);
   return S;
+}
+
+/* ---------- expansion: wild terrains (guarded by settings.expWild) ---------- */
+// A hex names its 3D model via h.art while the engine keeps paying out on h.terrain.
+// 'gold' is a real new terrain (pays a wild); 'jungle' is art-only over wood (pays lumber).
+function applyWildExpansion(S){
+  const pick=a=>a[Math.floor(Math.random()*a.length)];
+  const goldCands=S.board.hexes.filter(h=>h.num&&h.terrain!=='desert'&&h.num!==6&&h.num!==8);
+  if(goldCands.length){ const g=pick(goldCands); g.terrain='gold'; g.art='gold'; }
+  const forests=S.board.hexes.filter(h=>h.terrain==='wood'&&!h.art);
+  if(forests.length){ pick(forests).art='jungle'; }
+}
+// least-held resource the bank can still pay (used for Gold Field's wild payout)
+function neediestResource(S,pl){
+  let best=null,bv=Infinity;
+  for(const r of RES){ if(S.bank[r]<=0) continue; if(pl.res[r]<bv){ bv=pl.res[r]; best=r; } }
+  return best;
 }
 const curP = S => S.phase==='setup' ? S.players[S.setupQueue[0]] : S.players[S.order[S.turnPtr]];
 
@@ -743,10 +761,15 @@ function rollDice(S){
 }
 function distribute(S,total){
   const gains=S.players.map(()=>({wood:0,brick:0,sheep:0,wheat:0,ore:0}));
+  const gold={};
   for(const h of S.board.hexes){
     if(h.num!==total || h.id===S.board.robber) continue;
-    const res=h.terrain;
     const cs=hexCorners(h.x,h.y);
+    if(h.terrain==='gold'){
+      for(const [x,y] of cs){ const v=S.board.V[vkey(x,y)]; if(v&&v.bld) gold[v.bld.p]=(gold[v.bld.p]||0)+(v.bld.type==='city'?2:1); }
+      continue;
+    }
+    const res=h.terrain;
     for(const [x,y] of cs){
       const v=S.board.V[vkey(x,y)];
       if(v&&v.bld) gains[v.bld.p][res]+= v.bld.type==='city'?2:1;
@@ -768,6 +791,12 @@ function distribute(S,total){
   for(const [pi,g] of gains.entries()){
     const parts=RES.filter(r=>g[r]>0).map(r=>`+${g[r]} ${RES_META[r].label}`);
     if(parts.length) log(S,`<b>${S.players[pi].name}</b> ${parts.join(', ')}`);
+  }
+  // Gold Field pays a wild — each affected player auto-takes their neediest from the bank
+  for(const pi of Object.keys(gold)){
+    const pl=S.players[pi]; let got=0;
+    for(let k=0;k<gold[pi];k++){ const r=neediestResource(S,pl); if(r){ S.bank[r]--; pl.res[r]++; gains[pi][r]++; got++; } }
+    if(got) log(S,`<b>${pl.name}</b> struck gold (+${got})`);
   }
 }
 
@@ -918,6 +947,7 @@ function vertexScore(S,vk,p){
     if(h.num){ pips+=PIPS[h.num]; kinds.add(h.terrain); }
   }
   let s=pips + kinds.size*0.8;
+  if(v.hexes.some(hid=>S.board.hexes[hid].terrain==='gold')) s+=1.6;   // Gold Fields are prime
   if(v.port==='any') s+=0.7; else if(v.port) s+=1.0;
   // diversity vs what the bot already produces
   if(p){
@@ -1165,6 +1195,7 @@ const SAVE_KEY='hexhaven-save-v1', SET_KEY='hexhaven-settings-v1';
 const DEFAULT_SETTINGS={
   name:'You', colorIdx:0, bots:3, difficulty:'standard', target:10,
   layout:'spiral', friendlyRobber:false, botTrades:true, speed:'normal',
+  expWild:false,
 };
 let settings=loadSettings();
 let S=null;            // game state
@@ -1309,14 +1340,15 @@ function renderSetup(){
     <div><div class="field-lab">Island layout<small>Spiral is the classic numbering — no hot spots touching</small></div>${seg('layout',[{v:'spiral',l:'Spiral'},{v:'balanced',l:'Balanced'},{v:'random',l:'Chaos'}],s.layout)}</div>
     <div><div class="field-lab">Friendly robber<small>No stealing from players under 3 points</small></div>${seg('friendlyRobber',[{v:false,l:'Off'},{v:true,l:'On'}],s.friendlyRobber)}</div>
     <div><div class="field-lab">Bots may offer you trades</div>${seg('botTrades',[{v:false,l:'Off'},{v:true,l:'On'}],s.botTrades)}</div>
-    <div><div class="field-lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>`;
+    <div><div class="field-lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>
+    <div><div class="field-lab">Wild terrains<small>Expansion: adds a Gold Field (pays any resource) + a jungle</small></div>${seg('expWild',[{v:false,l:'Off'},{v:true,l:'On'}],s.expWild)}</div>`;
   $('setup-body').querySelectorAll('[data-seg]').forEach(g=>{
     g.querySelectorAll('button').forEach(b=>b.onclick=()=>{
       g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
       b.classList.add('on');
       const raw=b.dataset.v, key=g.dataset.seg;
       draft[key]= raw==='true'?true: raw==='false'?false: isNaN(+raw)?raw:+raw;
-      if(key==='bots'||key==='layout') reDeal();
+      if(key==='bots'||key==='layout'||key==='expWild') reDeal();
     });
   });
   $('set-colors').querySelectorAll('.swatch').forEach(b=>b.onclick=()=>{

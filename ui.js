@@ -32,6 +32,7 @@ const SAVE_KEY='hexhaven-save-v1', SET_KEY='hexhaven-settings-v1';
 const DEFAULT_SETTINGS={
   name:'You', colorIdx:0, bots:3, difficulty:'standard', target:10,
   layout:'spiral', friendlyRobber:false, botTrades:true, speed:'normal',
+  expWild:false,
 };
 let settings=loadSettings();
 let S=null;            // game state
@@ -176,14 +177,15 @@ function renderSetup(){
     <div><div class="field-lab">Island layout<small>Spiral is the classic numbering — no hot spots touching</small></div>${seg('layout',[{v:'spiral',l:'Spiral'},{v:'balanced',l:'Balanced'},{v:'random',l:'Chaos'}],s.layout)}</div>
     <div><div class="field-lab">Friendly robber<small>No stealing from players under 3 points</small></div>${seg('friendlyRobber',[{v:false,l:'Off'},{v:true,l:'On'}],s.friendlyRobber)}</div>
     <div><div class="field-lab">Bots may offer you trades</div>${seg('botTrades',[{v:false,l:'Off'},{v:true,l:'On'}],s.botTrades)}</div>
-    <div><div class="field-lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>`;
+    <div><div class="field-lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>
+    <div><div class="field-lab">Wild terrains<small>Expansion: adds a Gold Field (pays any resource) + a jungle</small></div>${seg('expWild',[{v:false,l:'Off'},{v:true,l:'On'}],s.expWild)}</div>`;
   $('setup-body').querySelectorAll('[data-seg]').forEach(g=>{
     g.querySelectorAll('button').forEach(b=>b.onclick=()=>{
       g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
       b.classList.add('on');
       const raw=b.dataset.v, key=g.dataset.seg;
       draft[key]= raw==='true'?true: raw==='false'?false: isNaN(+raw)?raw:+raw;
-      if(key==='bots'||key==='layout') reDeal();
+      if(key==='bots'||key==='layout'||key==='expWild') reDeal();
     });
   });
   $('set-colors').querySelectorAll('.swatch').forEach(b=>b.onclick=()=>{
