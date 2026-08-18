@@ -6,9 +6,18 @@ Companion docs: `DESIGN.md` (visual system), `CLAUDE.md` (architecture). Existin
 
 ---
 
-## Paste-ready prompt (short version)
+## Hand-off prompt (paste into a repo-aware Claude design session)
 
-> Build new low-poly 3D hex tiles for Hexhaven that match `export/tiles3d.js` exactly: three.js primitives only (no textures/images), flat-shaded `MeshStandardMaterial`, the same base-hex prism + cap geometry (circumradius `R = 0.5`, tiles must remain seam-compatible at 60° rotations), surface at `y ≈ 0`. Each tile is a `THREE.Group` returned from a `buildTile`-style function, `noToken` respected. Name every mesh so the board's living-detail loop animates it — reuse existing part-name prefixes where the motion already exists (`canopy_*`, `grass_*`, `sheep_head_N`, `eagle_*`, `boat_*`, `lumberjack_*`+`axe_*`) and use the new prefixes listed below for new motions. Match the established palette (caps in the forest/hills/pasture/fields/mountain/desert/water family). Keep poly budget close to the current tiles. Deliver as an additive module exposing the new `kind`s, plus a one-page note listing the new kinds + any new animation prefixes. Build the tiles in the spec below.
+> **Task:** add ~15 new expansion terrain tiles to Hexhaven, matching the existing 3D island exactly. Art only — do not change game rules.
+>
+> **Read these first (they are in this repo):**
+> - `export/tiles3d.js` — the tile builders. Match this precisely: three.js primitives only (no textures/images), flat-shaded `MeshStandardMaterial` via `mat()`/`makeMats()`, the same base-hex prism + cap (circumradius `R = 0.5`, must stay seam-compatible at 60° rotations), surface at `y ≈ 0`, `buildTile(THREE, kind, opts)` → `THREE.Group` honoring `opts.noToken`. Copy an existing builder such as `forest` or `mountains` as your pattern.
+> - `hex-board.js` — `_registerLife()` animates tiles by scanning child mesh `.name`. Reuse the existing prefixes so your tiles animate for free (`canopy_*`, `grass_*`, `sheep_head_N`, `eagle_*`, `boat_*`, `lumberjack_*`+`axe_*`); for new motions use the new prefixes named per tile below.
+> - `DESIGN.md` §4 (Terrain tiles) — the visual language and palette; `design/EXPANSION-TILES.md` (this file) — the full spec.
+>
+> **Build** every tile in [The tiles](#the-tiles). Keep them **yield-agnostic** (no resource icons baked in — meaning and number tokens live elsewhere) and near the current tiles' poly budget.
+>
+> **Deliver** a drop-in ES module `export/tiles3d.expansion.js` (no build step; imports nothing, is handed `THREE`) exposing the new `kind`s — either extend `buildTile`'s `BUILDERS` map or export `buildExpansionTile(THREE, kind, opts)` with the same shape. Add a short note listing the new `kind`s and any **new animation prefixes** you introduced, so `hex-board.js` `_registerLife`/`_frame` and the engine `KIND` map can be wired afterward.
 
 ---
 
