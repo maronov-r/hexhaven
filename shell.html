@@ -1,15 +1,31 @@
 <title>Hexhaven</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<div id="app">
+<script type="module" src="./hex-board.js"></script>
 
-  <!-- ======= MENU ======= -->
-  <section class="screen" id="menu">
-    <svg class="crest" viewBox="0 0 100 100" aria-hidden="true">
+<!-- the island: always mounted, behind everything -->
+<hex-board id="board3d"></hex-board>
+
+<!-- ============ LOADING ============ -->
+<section class="scrn sc-loading" id="sc-loading">
+  <svg class="crest" width="58" height="58" viewBox="0 0 100 100" aria-hidden="true">
+    <polygon points="50,4 90,27 90,73 50,96 10,73 10,27" fill="none" stroke="#e0b15e" stroke-width="3"/>
+    <polygon points="50,20 76,35 76,65 50,80 24,65 24,35" fill="#12233a" stroke="#e0b15e" stroke-width="1.5"/>
+    <path d="M 38 58 L 38 46 L 50 36 L 62 46 L 62 58 Z" fill="#e0b15e"/>
+  </svg>
+  <div class="wordmark load-word">HEX<em>HAVEN</em></div>
+  <div class="loadbar"><i id="load-bar"></i></div>
+  <div class="load-status" id="load-status">Waking the engine</div>
+</section>
+
+<!-- ============ MENU ============ -->
+<section class="scrn sc-menu" id="sc-menu">
+  <div class="menu-col">
+    <svg class="crest" width="44" height="44" viewBox="0 0 100 100" aria-hidden="true">
       <polygon points="50,4 90,27 90,73 50,96 10,73 10,27" fill="none" stroke="#e0b15e" stroke-width="3"/>
       <polygon points="50,20 76,35 76,65 50,80 24,65 24,35" fill="#12233a" stroke="#e0b15e" stroke-width="1.5"/>
       <path d="M 38 58 L 38 46 L 50 36 L 62 46 L 62 58 Z" fill="#e0b15e"/>
     </svg>
-    <h1 class="title">HEX<em>HAVEN</em></h1>
+    <h1 class="wordmark menu-word">HEX<em>HAVEN</em></h1>
     <div class="tagline">Settle · Trade · Build</div>
     <div class="menu-actions">
       <button class="btn primary" id="btn-new">New game</button>
@@ -17,47 +33,78 @@
       <button class="btn" id="btn-settings">Settings</button>
       <button class="btn ghost" id="btn-rules">How to play</button>
     </div>
-    <p class="menu-note">Tip: open this page in your phone's browser and use <b>Share → Add&nbsp;to&nbsp;Home&nbsp;Screen</b> to keep it as an app. Games save automatically.</p>
-  </section>
+    <p class="menu-note">Drag the island to look around. Games save automatically.</p>
+  </div>
+</section>
 
-  <!-- ======= GAME ======= -->
-  <section class="screen" id="game">
-    <div class="topbar">
-      <span class="title-sm">HEX<em>HAVEN</em></span>
-      <span class="spacer"></span>
-      <button class="iconbtn" id="g-settings" aria-label="Settings" data-ico="gear"></button>
-      <button class="iconbtn" id="g-menu" aria-label="Menu" data-ico="menu"></button>
+<!-- ============ SETUP ============ -->
+<section class="scrn sc-setup" id="sc-setup">
+  <div class="setup-card glass">
+    <div class="setup-head">
+      <div class="setup-title">Set up your table</div>
+      <div class="setup-sub" id="setup-sub">Then deal yourself in.</div>
     </div>
-
-    <div id="opponents"></div>
-
-    <div id="boardwrap">
-      <svg id="board" xmlns="http://www.w3.org/2000/svg"></svg>
-      <div id="dicebox"></div>
-      <div id="turnflag"></div>
-      <div id="hint">Welcome to the island</div>
+    <div class="setup-body" id="setup-body"></div>
+    <div class="setup-foot">
+      <button class="btn ghost" id="setup-back">Back</button>
+      <button class="btn primary" id="setup-go">Start game</button>
     </div>
+  </div>
+</section>
 
-    <div class="rightcol">
-      <div id="dock">
-        <div class="dock-top" id="me-line"></div>
-        <div id="hand"></div>
-        <div class="actions">
-          <button class="act" id="act-road"><span class="ic" data-ico="road"></span>Road<span class="cost" data-cost="road"></span></button>
-          <button class="act" id="act-sett"><span class="ic" data-ico="house"></span>Settle<span class="cost" data-cost="sett"></span></button>
-          <button class="act" id="act-city"><span class="ic" data-ico="city"></span>City<span class="cost" data-cost="city"></span></button>
-          <button class="act" id="act-dev"><span class="ic" data-ico="scroll"></span>Dev card<span class="cost" data-cost="dev"></span></button>
-        </div>
-        <div class="bigrow">
-          <button class="btn primary" id="btn-roll"><span data-ico="die"></span> Roll dice</button>
-          <button class="btn" id="btn-trade"><span data-ico="trade"></span> Trade</button>
-          <button class="btn ghost" id="btn-end">End turn</button>
-        </div>
+<!-- ============ GAME CHROME ============ -->
+<section class="scrn sc-game" id="sc-game">
+
+  <!-- header -->
+  <div class="g-header glass" id="g-header">
+    <svg class="crest" width="26" height="26" viewBox="0 0 100 100" aria-hidden="true">
+      <polygon points="50,4 90,27 90,73 50,96 10,73 10,27" fill="none" stroke="#e0b15e" stroke-width="6"/>
+      <polygon points="50,20 76,35 76,65 50,80 24,65 24,35" fill="#12233a" stroke="#e0b15e" stroke-width="3"/>
+      <path d="M 38 58 L 38 46 L 50 36 L 62 46 L 62 58 Z" fill="#e0b15e"/>
+    </svg>
+    <span class="wordmark head-word">HEX<em>HAVEN</em></span>
+    <div class="turn-pill" id="turnflag"></div>
+    <span class="spacer"></span>
+    <span class="first-to" id="first-to"></span>
+    <button class="hbtn" id="btn-new-island">New island</button>
+    <button class="hbtn brasslink" id="btn-hide">Hide panels</button>
+    <button class="iconbtn" id="g-menu" aria-label="Menu" data-ico="menu"></button>
+  </div>
+
+  <!-- self-fading chronicle -->
+  <div class="chronicle glass" id="log" aria-live="polite"></div>
+
+  <!-- hint pill -->
+  <div class="hint-pill" id="hint">Welcome to the island</div>
+
+  <!-- rival strip -->
+  <div class="rival-strip" id="opponents"></div>
+
+  <!-- dice -->
+  <div class="dice-panel glass" id="dicebox"></div>
+
+  <!-- dock -->
+  <div class="dock glass" id="dock">
+    <button class="dock-handle" id="dock-handle" aria-label="Drag to collapse or expand"><span></span></button>
+    <div class="dock-id" id="me-line"></div>
+    <div class="dock-scroll">
+      <div class="hand" id="hand"></div>
+      <div class="build-grid">
+        <button class="act" id="act-road"><span class="ic" data-ico="road"></span><span class="al">Road</span><span class="cost" data-cost="road"></span></button>
+        <button class="act" id="act-sett"><span class="ic" data-ico="house"></span><span class="al">Settle</span><span class="cost" data-cost="sett"></span></button>
+        <button class="act" id="act-city"><span class="ic" data-ico="city"></span><span class="al">City</span><span class="cost" data-cost="city"></span></button>
+        <button class="act" id="act-dev"><span class="ic" data-ico="scroll"></span><span class="al">Dev card</span><span class="cost" data-cost="dev"></span></button>
       </div>
-      <div id="log" aria-live="polite"></div>
     </div>
-  </section>
-</div>
+    <div class="dock-foot">
+      <button class="btn primary" id="btn-roll"><span data-ico="die"></span> Roll dice</button>
+      <div class="foot-row">
+        <button class="btn" id="btn-trade"><span data-ico="coins"></span> Trade</button>
+        <button class="btn ghost" id="btn-end">End turn</button>
+      </div>
+    </div>
+  </div>
+</section>
 
-<!-- ======= MODAL ======= -->
-<div id="overlay"><div class="sheet" id="sheet"></div></div>
+<!-- ============ MODAL SHEET ============ -->
+<div id="overlay"><div class="sheet glass" id="sheet"></div></div>

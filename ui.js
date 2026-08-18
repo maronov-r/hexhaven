@@ -50,22 +50,152 @@ function hasSave(){ try{return !!localStorage.getItem(SAVE_KEY);}catch(e){return
 const SPEEDS={relaxed:900,normal:520,fast:220};
 const tick=()=>SPEEDS[S?.settings?.speed||settings.speed]||520;
 
+/* ---------------- 3D board glue ---------------- */
+const W_K=(0.5*1.02)/56;                 // engine px -> world units (matches hex-board)
+const toWorld=(x,y)=>[x*W_K,y*W_K];
+let board=null, pendingState=null;
+let engineReady=false, boardReady=false, loadDone=false, panelsHidden=false;
+let screen='loading';
+let draft=null, fromMenuNew=true;
+const flashRes=new Set();
+let diceAnimate=false, lastLogLen=-1, idleTimer=null;
+
+function attachBoard(b){
+  board=b; boardReady=true;
+  if(pendingState){ board.setState(pendingState); pendingState=null; }
+  setLoad('board');
+}
+document.addEventListener('hex-board-ready',e=>attachBoard(e.detail));
+
+function boardNewIsland(st){ if(board) board.setState(st); else pendingState=st; }
+function boardRefresh(){ if(board) board.refresh(); }
+function boardPulse(){ if(board&&S&&S.dice) board.pulse(S.dice[0]+S.dice[1]); }
+function afterAnyRoll(){
+  boardPulse(); diceAnimate=true; flashRes.clear();
+  if(S.dice && S.dice[0]+S.dice[1]!==7){
+    const g=S.lastGains&&S.lastGains[0];
+    if(g) for(const r of RES) if(g[r]>0) flashRes.add(r);
+  }
+}
+
+const MENU_VIEW=[420,60,-210], GAME_VIEW=[354,152,170];
+function gameView(){
+  const w=innerWidth,h=innerHeight;
+  if(w>=820 && h>=520) return GAME_VIEW;
+  if(w>h && h<=560) return [Math.min(250,Math.round(w*0.34)),30,120];  // landscape phone: side dock
+  const collapsed=document.getElementById("dock")&&document.getElementById("dock").classList.contains("collapsed");
+  return [0, 62 + Math.round(h*(collapsed?0.12:0.5)), 0];              // portrait: reserve header/strip + bottom sheet
+}
+function setDockCollapsed(on){ const d=$("dock"); if(!d)return; d.classList.toggle("collapsed",on); if(screen==="game") setView(panelsHidden?[0,0,0]:gameView()); }
+function initDock(){
+  const handle=$("dock-handle"); if(!handle) return;
+  let sy=0,dy=0,active=false;
+  handle.addEventListener("pointerdown",e=>{active=true;sy=e.clientY;dy=0;try{handle.setPointerCapture(e.pointerId);}catch(_){}}); 
+  handle.addEventListener("pointermove",e=>{ if(active) dy=e.clientY-sy; });
+  const end=()=>{ if(!active)return; active=false; if(dy>26) setDockCollapsed(true); else if(dy<-26) setDockCollapsed(false); else setDockCollapsed(!$("dock").classList.contains("collapsed")); };
+  handle.addEventListener("pointerup",end); handle.addEventListener("pointercancel",end);
+}
+function menuView(){ return innerWidth<820 ? [0,0,0] : MENU_VIEW; }
+function setView(v){ if(board) board.setPanels(v[0],v[1],v[2]); }
+
 /* ---------------- screens ---------------- */
-function show(screen){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
-  $(screen).classList.add('on');
+function show(name){
+  screen=name;
+  document.body.dataset.screen=name;
+  if(name==='menu'){ setView(menuView()); refreshMenu(); }
+  else if(name==='setup') setView(menuView());
+  else if(name==='game') setView(panelsHidden?[0,0,0]:gameView());
 }
+
+/* ---------------- loading ---------------- */
+function setLoad(flag){
+  if(flag==='engine') engineReady=true;
+  if(flag==='board') boardReady=true;
+  const bar=$('load-bar'), st=$('load-status');
+  let pct=14, msg='Waking the engine';
+  if(engineReady){ pct=58; msg='Raising the island'; }
+  if(engineReady&&boardReady){ pct=100; msg='Ready'; }
+  if(bar) bar.style.width=pct+'%';
+  if(st) st.textContent=msg;
+  if(engineReady&&boardReady&&!loadDone){
+    loadDone=true;
+    try{ boardNewIsland(newGame({...settings})); }catch(e){}
+    setTimeout(()=>show('menu'),620);
+  }
+}
+
 function boot(){
-  $('btn-new').onclick=()=>openSettings(true);
-  $('btn-continue').onclick=()=>{ try{ S=JSON.parse(localStorage.getItem(SAVE_KEY)); show('game'); renderAll(); advance(); }catch(e){} };
-  $('btn-settings').onclick=()=>openSettings(false);
+  document.body.dataset.screen='loading';
+  $('btn-new').onclick=()=>showSetup(true);
+  $('btn-continue').onclick=()=>{ try{ S=JSON.parse(localStorage.getItem(SAVE_KEY)); if(!S) return; boardNewIsland(S); startResume(); }catch(e){} };
+  $('btn-settings').onclick=()=>showSetup(false);
   $('btn-rules').onclick=openRules;
-  $('g-settings').onclick=()=>openSettings(false);
-  $('g-menu').onclick=()=>{ stopBots(); saveGame(); show('menu'); refreshMenu(); };
-  refreshMenu();
-  show('menu');
+  $('g-menu').onclick=()=>{ stopBots(); saveGame(); show('menu'); };
+  $('btn-new-island').onclick=()=>{ showSetup(true); };
+  $('btn-hide').onclick=togglePanels;
+  $('setup-back').onclick=()=>show('menu');
+  $('log').onclick=()=>$('log').classList.toggle('open');
+  if(window.__hexBoard) attachBoard(window.__hexBoard);
+  initDock();
+  let rzT; window.addEventListener("resize",()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(screen==="game") setView(panelsHidden?[0,0,0]:gameView()); else if(screen==="menu"||screen==="setup") setView(menuView()); },160); });
+  setLoad('engine');
 }
-function refreshMenu(){ $('btn-continue').disabled=!hasSave(); }
+function startResume(){
+  panelsHidden=false; document.body.classList.remove('panels-hidden');
+  $('first-to').textContent='First to '+S.settings.target+' points';
+  show('game'); renderAll(); advance();
+}
+function refreshMenu(){ const has=hasSave(); $('btn-continue').disabled=!has; $('btn-continue').style.opacity=has?'1':'.4'; }
+
+function togglePanels(){
+  panelsHidden=!panelsHidden;
+  document.body.classList.toggle('panels-hidden',panelsHidden);
+  $('btn-hide').textContent=panelsHidden?'Show panels':'Hide panels';
+  setView(panelsHidden?[0,0,0]:gameView());
+}
+
+/* ---------------- setup screen ---------------- */
+function showSetup(fromNew){
+  fromMenuNew=fromNew;
+  draft={...settings};
+  $('setup-sub').textContent=fromNew?'Then deal yourself in.':'Applies to your next island.';
+  $('setup-go').textContent=fromNew?'Start game':'Save and start';
+  renderSetup();
+  show('setup');
+  reDeal();
+}
+function reDeal(){ try{ boardNewIsland(newGame({...draft})); }catch(e){} }
+function renderSetup(){
+  const s=draft;
+  $('setup-body').innerHTML=`
+    <div><div class="field-lab">Your name</div><input type="text" id="set-name" maxlength="14" value="${s.name.replace(/"/g,'&quot;')}"></div>
+    <div><div class="field-lab">Your colour</div><div class="swatches" id="set-colors">${PLAYER_COLORS.map((c,i)=>`<button class="swatch ${i===s.colorIdx?'on':''}" data-i="${i}" style="background:${c.hex}" aria-label="${c.id}"></button>`).join('')}</div></div>
+    <div><div class="field-lab">Rivals</div>${seg('bots',[{v:1,l:'1'},{v:2,l:'2'},{v:3,l:'3'}],s.bots)}</div>
+    <div><div class="field-lab">Bot skill</div>${seg('difficulty',[{v:'casual',l:'Casual'},{v:'standard',l:'Standard'},{v:'cutthroat',l:'Cutthroat'}],s.difficulty)}</div>
+    <div><div class="field-lab">Points to win</div>${seg('target',[{v:8,l:'8'},{v:10,l:'10'},{v:12,l:'12'}],s.target)}</div>
+    <div><div class="field-lab">Island layout<small>Spiral is the classic numbering — no hot spots touching</small></div>${seg('layout',[{v:'spiral',l:'Spiral'},{v:'balanced',l:'Balanced'},{v:'random',l:'Chaos'}],s.layout)}</div>
+    <div><div class="field-lab">Friendly robber<small>No stealing from players under 3 points</small></div>${seg('friendlyRobber',[{v:false,l:'Off'},{v:true,l:'On'}],s.friendlyRobber)}</div>
+    <div><div class="field-lab">Bots may offer you trades</div>${seg('botTrades',[{v:false,l:'Off'},{v:true,l:'On'}],s.botTrades)}</div>
+    <div><div class="field-lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>`;
+  $('setup-body').querySelectorAll('[data-seg]').forEach(g=>{
+    g.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+      g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      const raw=b.dataset.v, key=g.dataset.seg;
+      draft[key]= raw==='true'?true: raw==='false'?false: isNaN(+raw)?raw:+raw;
+      if(key==='bots'||key==='layout') reDeal();
+    });
+  });
+  $('set-colors').querySelectorAll('.swatch').forEach(b=>b.onclick=()=>{
+    $('set-colors').querySelectorAll('.swatch').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); draft.colorIdx=+b.dataset.i; reDeal();
+  });
+  $('setup-go').onclick=()=>{
+    draft.name=$('set-name').value.trim()||'You';
+    settings={...draft}; saveSettings();
+    startGame();
+  };
+}
 
 /* ---------------- modal helpers ---------------- */
 function openSheet(html){ $('sheet').innerHTML=html; $('overlay').classList.add('on'); }
@@ -76,44 +206,6 @@ $('overlay')?.addEventListener?.('click',e=>{ if(e.target.id==='overlay'&&$('ove
 function seg(name,opts,val){
   return `<div class="seg" data-seg="${name}">${opts.map(o=>`<button data-v="${o.v}" class="${String(o.v)===String(val)?'on':''}">${o.l}</button>`).join('')}</div>`;
 }
-function openSettings(startAfter){
-  const s={...settings};
-  openSheet(`
-    <h2>Game settings</h2>
-    <div class="sub">${startAfter?'Set up your table, then deal in.':'Changes apply to the next new game.'}</div>
-    <div class="set-row"><div class="lab">Your name</div><input type="text" id="set-name" maxlength="14" value="${s.name.replace(/"/g,'&quot;')}"></div>
-    <div class="set-row"><div class="lab">Your color</div><div class="swatches" id="set-colors">${PLAYER_COLORS.map((c,i)=>`<button class="swatch ${i===s.colorIdx?'on':''}" data-i="${i}" style="background:${c.hex}" aria-label="${c.id}"></button>`).join('')}</div></div>
-    <div class="set-row"><div class="lab">Rivals<small>Bot opponents at the table</small></div>${seg('bots',[{v:1,l:'1'},{v:2,l:'2'},{v:3,l:'3'}],s.bots)}</div>
-    <div class="set-row"><div class="lab">Bot skill</div>${seg('difficulty',[{v:'casual',l:'Casual'},{v:'standard',l:'Standard'},{v:'cutthroat',l:'Cutthroat'}],s.difficulty)}</div>
-    <div class="set-row"><div class="lab">Victory points to win</div>${seg('target',[{v:8,l:'8'},{v:10,l:'10'},{v:12,l:'12'}],s.target)}</div>
-    <div class="set-row"><div class="lab">Island layout<small>Spiral = classic numbering, no hot spots touching</small></div>${seg('layout',[{v:'spiral',l:'Spiral'},{v:'balanced',l:'Balanced'},{v:'random',l:'Chaos'}],s.layout)}</div>
-    <div class="set-row"><div class="lab">Friendly robber<small>No stealing from players under 3 VP</small></div>${seg('friendlyRobber',[{v:false,l:'Off'},{v:true,l:'On'}],s.friendlyRobber)}</div>
-    <div class="set-row"><div class="lab">Bots may offer you trades</div>${seg('botTrades',[{v:false,l:'Off'},{v:true,l:'On'}],s.botTrades)}</div>
-    <div class="set-row"><div class="lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>
-    <div class="sheet-actions">
-      <button class="btn ghost" id="set-cancel">Cancel</button>
-      <button class="btn primary" id="set-ok">${startAfter?'Start game':'Save'}</button>
-    </div>`);
-  $('sheet').querySelectorAll('[data-seg]').forEach(g=>{
-    g.querySelectorAll('button').forEach(b=>b.onclick=()=>{
-      g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
-      b.classList.add('on');
-      const raw=b.dataset.v;
-      s[g.dataset.seg]= raw==='true'?true: raw==='false'?false: isNaN(+raw)?raw:+raw;
-    });
-  });
-  $('set-colors').querySelectorAll('.swatch').forEach(b=>b.onclick=()=>{
-    $('set-colors').querySelectorAll('.swatch').forEach(x=>x.classList.remove('on'));
-    b.classList.add('on'); s.colorIdx=+b.dataset.i;
-  });
-  $('set-cancel').onclick=closeSheet;
-  $('set-ok').onclick=()=>{
-    s.name=$('set-name').value.trim()||'You';
-    settings=s; saveSettings(); closeSheet();
-    if(startAfter) startGame();
-  };
-}
-
 /* ---------------- rules sheet ---------------- */
 function openRules(){
   openSheet(`
@@ -144,9 +236,12 @@ function openRules(){
 function startGame(){
   stopBots();
   S=newGame({...settings});
+  boardNewIsland(S);
   log(S,`A new island rises. First to <b>${S.settings.target} VP</b> wins.`,true);
   const first=S.players[S.setupQueue[0]];
   log(S,`<b>${first.name}</b> places first`,true);
+  panelsHidden=false; document.body.classList.remove('panels-hidden');
+  $('first-to').textContent='First to '+S.settings.target+' points';
   show('game');
   renderAll(); saveGame();
   advance();
@@ -239,7 +334,7 @@ function beginPlayerTurn(){
 function onRoll(){
   if(S.phase!=='play'||curP(S).bot||S.rolled) return;
   animateDice();
-  const r=rollDice(S);
+  const r=rollDice(S); afterAnyRoll();
   renderAll();
   if(r.seven){ S.afterSeven=true; setTimeout(advance,tick()); }
   else hint('Build, trade, or end your turn');
@@ -535,7 +630,7 @@ function botTurn(afterKnight){
       }
     }
     animateDice();
-    const r=rollDice(S);
+    const r=rollDice(S); afterAnyRoll();
     renderAll();
     if(r.seven){ S.afterSeven=true; setTimeout(advance,tick()); return; }
     queueBot(()=>botTurn(true));
@@ -643,7 +738,8 @@ function renderAll(){
 }
 function renderFlag(){
   const p=curP(S);
-  $('turnflag').innerHTML=`<span class="dot" style="background:${p.color}"></span><span>${S.phase==='setup'?'Founding: ':''}${p.bot?p.name:'Your turn'}</span>`;
+  const state=S.phase==='setup'?'founding':(p.bot?'thinking':'your turn');
+  $('turnflag').innerHTML=`<span class="dot" style="background:${p.color}"></span><span class="nm">${p.bot?p.name:'You'}</span><span class="st">${state}</span>`;
 }
 const PIP_POS={1:[[0,0]],2:[[-1,-1],[1,1]],3:[[-1,-1],[0,0],[1,1]],4:[[-1,-1],[1,-1],[-1,1],[1,1]],5:[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]],6:[[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]]};
 function dieFace(n){
@@ -654,24 +750,30 @@ function renderDice(){
   const box=$('dicebox');
   if(!S.dice){ box.innerHTML=''; return; }
   box.innerHTML=S.dice.map(dieFace).join('')+`<span class="dtotal num">${S.dice[0]+S.dice[1]}</span>`;
+  if(diceAnimate){ box.querySelectorAll('.die').forEach(d=>{ void d.offsetWidth; d.classList.add('rolling'); }); diceAnimate=false; }
 }
 function renderLog(){
-  $('log').innerHTML=S.log.slice().reverse().map(l=>`<div class="l ${l.sys?'sys':''}">${l.msg}</div>`).join('');
+  const box=$('log');
+  box.innerHTML=S.log.slice().reverse().slice(0,40).map(l=>`<div class="l ${l.sys?'sys':''}">${l.msg}</div>`).join('');
+  if(S.log.length!==lastLogLen){
+    lastLogLen=S.log.length;
+    box.classList.remove('idle');
+    clearTimeout(idleTimer);
+    idleTimer=setTimeout(()=>box.classList.add('idle'),4200);
+  }
 }
 function renderOpponents(){
-  const box=$('opponents');
-  box.innerHTML='';
+  const box=$('opponents'); box.innerHTML='';
   for(const p of S.players){
     if(!p.bot) continue;
-    const active=curP(S).i===p.i;
-    const d=el('div','opp'+(active?' active':''));
+    const d=el('div','rival'+(curP(S).i===p.i?' active':''));
+    d.style.setProperty('--pc',p.color);
     const badges=[];
     if(S.longestRoad.owner===p.i) badges.push(ico('road',11));
     if(S.largestArmy.owner===p.i) badges.push(ico('sword',11));
     d.innerHTML=`
-      ${badges.length?`<span class="badge">${badges.join('')}</span>`:''}
-      <div class="who"><span class="dot" style="background:${p.color}"></span><span class="name">${p.name}</span><span class="vp num">${vp(S,p,false)}</span></div>
-      <div class="meta num"><span title="resource cards">${ico('card',12)} <b>${handSize(p)}</b></span><span title="development cards">${ico('scroll',12)} <b>${p.dev.length+p.newdev.length}</b></span><span title="knights played">${ico('sword',12)} <b>${p.knights}</b></span><span title="longest road">${ico('road',12)} <b>${p.roadLen||0}</b></span></div>`;
+      <div class="rtop"><span class="dot" style="background:${p.color}"></span><span class="name">${p.name}</span><span class="vp num">${vp(S,p,false)}</span></div>
+      <div class="meta num"><span title="cards">${ico('card',12)} <b>${handSize(p)}</b></span><span title="dev cards">${ico('scroll',12)} <b>${p.dev.length+p.newdev.length}</b></span><span title="knights">${ico('sword',12)} <b>${p.knights}</b></span><span title="road">${ico('road',12)} <b>${p.roadLen||0}</b></span>${badges.length?`<span class="rbadge">${badges.join('')}</span>`:''}</div>`;
     box.appendChild(d);
   }
 }
@@ -685,265 +787,78 @@ function renderDock(){
   if(S.largestArmy.owner===0) badges.push(ico('sword',12)+' Largest Army');
   $('me-line').innerHTML=`
     <span class="me-name"><span class="dot" style="background:${me.color}"></span>${me.name}</span>
-    <span class="me-vp num">${vp(S,me,true)} VP</span>
     <span class="spacer"></span>
-    <span class="me-stats num">${badges.length?`<span class="mybadge">${badges.join(' · ')}</span>`:''}<span title="settlements left">${ico('house',13)} <b>${me.stock.sett}</b></span><span title="cities left">${ico('city',13)} <b>${me.stock.city}</b></span><span title="roads left">${ico('road',13)} <b>${me.stock.road}</b></span></span>`;
+    <span class="me-stats num">${badges.length?`<span class="mybadge">${badges.join(' · ')}</span>`:''}<span title="settlements left">${ico('house',13)} <b>${me.stock.sett}</b></span><span title="cities left">${ico('city',13)} <b>${me.stock.city}</b></span><span title="roads left">${ico('road',13)} <b>${me.stock.road}</b></span></span>
+    <span class="me-vp num">${vp(S,me,true)} VP</span>`;
 
   // hand
-  const hand=$('hand');
-  hand.innerHTML='';
-  for(const r of RES){
-    const c=el('div','rescard'+(me.res[r]===0?' zero':''));
-    c.style.background=RES_META[r].col;
-    c.innerHTML=`<span class="ic">${resIconHTML(r,22)}</span><span class="ct num">${me.res[r]}</span><span class="lb">${RES_META[r].label}</span>`;
+  const hand=$('hand'); hand.innerHTML='';
+  RES.forEach((r,idx)=>{
+    const c=el('div','rescard'+(me.res[r]===0?' zero':'')+(flashRes.has(r)?' bump':''));
+    c.style.setProperty('--rc',RES_META[r].col);
+    c.style.animationDelay=(idx*60)+'ms';
+    c.innerHTML=`<span class="ic">${resIconHTML(r,24)}</span><span class="ct num">${me.res[r]}</span><span class="lb">${RES_META[r].label}</span>`;
     hand.appendChild(c);
-  }
-  // dev cards
+  });
+  flashRes.clear();
+
+  // dev section
+  let dw=$('devwrap');
+  if(!dw){ dw=el('div','devwrap'); dw.id='devwrap'; hand.after(dw); }
   const groups={};
   me.dev.forEach(c=>groups[c]=(groups[c]||0)+1);
   me.newdev.forEach(c=>{groups[c]=(groups[c]||0)+1; groups['_new_'+c]=(groups['_new_'+c]||0)+1;});
-  for(const [c,n] of Object.entries(groups)){
-    if(c.startsWith('_new_')) continue;
-    const fresh=groups['_new_'+c]||0;
-    const playableN=n-fresh;
+  const keys=Object.keys(groups).filter(k=>!k.startsWith('_new_'));
+  dw.innerHTML=`<div class="sec-lab">Development</div>`+(keys.length?'':`<div class="dev-empty">No cards in hand.</div>`);
+  for(const c of keys){
+    const n=groups[c], fresh=groups['_new_'+c]||0, playableN=n-fresh;
     const playable=myTurn&&!me.playedDevThisTurn&&c!=='vp'&&playableN>0&&(S.rolled||c==='knight')&&S.phase==='play'&&!S.discardQueue.length&&mode!=='robber';
+    const note=c==='vp'?'Worth 1 point':(playableN<=0&&fresh?'Ready next turn':DEV_META[c].desc);
     const d=el('button','devchip'+(playable?' playable':''));
-    d.innerHTML=`<span class="ic">${ico(DEV_ICO[c],17)}</span><div class="lb">${DEV_META[c].label}${n>1?` ×${n}`:''}</div>`;
-    d.title=DEV_META[c].desc+(fresh?` (${fresh} new this turn)`:'');
+    d.innerHTML=`<span class="ic">${ico(DEV_ICO[c],17)}</span><span><span class="dlab">${DEV_META[c].label}${n>1?` ×${n}`:''}</span><span class="dnote">${note}</span></span>`;
     if(playable) d.onclick=()=>onPlayDev(c);
-    hand.appendChild(d);
+    dw.appendChild(d);
   }
 
-  // actions
+  // build + footer
   const can=(cost)=>myTurn&&S.rolled&&S.phase==='play'&&canAfford(me,cost)&&!S.discardQueue.length&&mode!=='robber';
   const setBtn=(id,on,enabled)=>{ const b=$(id); b.disabled=!enabled; b.classList.toggle('on',mode===on); };
-  setBtn('act-road','road',(can(COST.road)||S.freeRoads>0&&myTurn)&&me.stock.road>0&&roadSpots(S,me,null).length>0);
+  setBtn('act-road','road',(can(COST.road)||(S.freeRoads>0&&myTurn))&&me.stock.road>0&&roadSpots(S,me,null).length>0);
   setBtn('act-sett','sett',can(COST.sett)&&me.stock.sett>0&&settSpots(S,me,false).length>0);
   setBtn('act-city','city',can(COST.city)&&me.stock.city>0&&citySpots(S,me).length>0);
   $('act-dev').disabled=!(can(COST.dev)&&S.devDeck.length>0);
-  $('act-dev').querySelector('.cost').innerHTML=S.devDeck.length?`${costDots(COST.dev)} · <span class="num">${S.devDeck.length}</span>`:'sold out';
+  $('act-dev').querySelector('.cost').innerHTML=S.devDeck.length?costDots(COST.dev):'—';
 
-  $('btn-roll').style.display=(myTurn&&S.phase==='play'&&!S.rolled)?'':'none';
-  $('btn-roll').disabled=!(myTurn&&S.phase==='play'&&!S.rolled&&!S.discardQueue.length&&mode!=='robber');
+  const preRoll=myTurn&&S.phase==='play'&&!S.rolled;
+  const rollBtn=$('btn-roll');
+  rollBtn.disabled=!(preRoll&&!S.discardQueue.length&&mode!=='robber');
+  rollBtn.innerHTML=S.rolled?`Rolled ${S.dice?S.dice[0]+S.dice[1]:''}`:`${ico('die',18)} Roll dice`;
   $('btn-trade').disabled=!(myTurn&&S.rolled&&S.phase==='play'&&mode!=='robber');
   $('btn-end').disabled=!(myTurn&&S.rolled&&S.phase==='play'&&mode!=='robber'&&!S.discardQueue.length);
 }
 
-/* ------- board svg ------- */
-const SVG_NS='http://www.w3.org/2000/svg';
-function svg(tag,attrs){ const e=document.createElementNS(SVG_NS,tag); for(const [k,v] of Object.entries(attrs||{})) e.setAttribute(k,v); return e; }
-
-/* terrain artwork — one glyph fn per terrain, drawn small and repeated */
-const ART={
-  wood(g){
-    g.appendChild(svg('path',{d:'M0 -11 L7 0 L3.5 0 L8 7 L2 7 L2 11 L-2 11 L-2 7 L-8 7 L-3.5 0 L-7 0 Z',
-      fill:'#1d4630',stroke:'#12331f','stroke-width':.8}));
-  },
-  brick(g){
-    const b=(x,y)=>g.appendChild(svg('rect',{x,y,width:9,height:5,rx:.8,fill:'#8f452c',stroke:'#6f351f','stroke-width':.8}));
-    b(-10,-6); b(0.5,-6); b(-4.75,0);
-  },
-  sheep(g){
-    g.appendChild(svg('line',{x1:-3.5,y1:3,x2:-3.5,y2:7,stroke:'#39424f','stroke-width':1.6}));
-    g.appendChild(svg('line',{x1:3.5,y1:3,x2:3.5,y2:7,stroke:'#39424f','stroke-width':1.6}));
-    g.appendChild(svg('ellipse',{cx:0,cy:0,rx:7,ry:4.6,fill:'#f5f2e6',stroke:'#c9c2ac','stroke-width':.8}));
-    g.appendChild(svg('circle',{cx:6.8,cy:-2.2,r:2.7,fill:'#39424f'}));
-  },
-  wheat(g){
-    for(const [dx,rot] of [[-6,-14],[0,0],[6,14]]){
-      const s=svg('g',{transform:`translate(${dx},0) rotate(${rot})`});
-      s.appendChild(svg('line',{x1:0,y1:10,x2:0,y2:-9,stroke:'#8a660f','stroke-width':1.6}));
-      for(let y=-8;y<=0;y+=3){
-        s.appendChild(svg('line',{x1:0,y1:y,x2:-3.4,y2:y-2.6,stroke:'#8a660f','stroke-width':1.5}));
-        s.appendChild(svg('line',{x1:0,y1:y,x2:3.4,y2:y-2.6,stroke:'#8a660f','stroke-width':1.5}));
-      }
-      g.appendChild(s);
-    }
-  },
-  ore(g){
-    g.appendChild(svg('path',{d:'M-11 7 L-3.5 -8 L1 0 L6 -5.5 L11 7 Z',fill:'#4c586e',stroke:'#39445a','stroke-width':.8}));
-    g.appendChild(svg('path',{d:'M-3.5 -8 L-1.4 -3.8 L-5.6 -3.8 Z',fill:'#dfe6ef'}));
-    g.appendChild(svg('path',{d:'M6 -5.5 L7.4 -2.6 L4.6 -2.6 Z',fill:'#dfe6ef'}));
-  },
-  desert(g){
-    g.appendChild(svg('path',{d:'M-11 3 Q-4 -4 3 3',fill:'none',stroke:'#a88d5d','stroke-width':2,'stroke-linecap':'round'}));
-    g.appendChild(svg('path',{d:'M-2 9 Q5 2 12 9',fill:'none',stroke:'#a88d5d','stroke-width':2,'stroke-linecap':'round'}));
-  },
-};
-function addTerrainArt(parent,h){
-  const fn=ART[h.terrain==='desert'?'desert':h.terrain];
-  if(!fn) return;
-  const spots=h.terrain==='desert'
-    ? [[0,-30,1],[-24,16,.9],[24,16,.9]]
-    : [[0,-31,1],[-26,15,.92],[26,15,.92]];
-  for(const [dx,dy,sc] of spots){
-    const g=svg('g',{transform:`translate(${h.x+dx},${h.y+dy}) scale(${sc})`,opacity:.85});
-    fn(g); parent.appendChild(g);
-  }
-}
-
+/* ------- 3D board: refresh + projected placement markers ------- */
 function renderBoard(){
-  const b=S.board, root=$('board');
-  root.innerHTML='';
-  const xs=b.hexes.map(h=>h.x), ys=b.hexes.map(h=>h.y);
-  const pad=HEX_SIZE*1.95;
-  const minX=Math.min(...xs)-pad, maxX=Math.max(...xs)+pad;
-  const minY=Math.min(...ys)-pad, maxY=Math.max(...ys)+pad;
-  root.setAttribute('viewBox',`${minX} ${minY} ${maxX-minX} ${maxY-minY}`);
-
-  // soft depth shade reused by every tile
-  const defs=svg('defs');
-  const grad=svg('linearGradient',{id:'hexshade',x1:0,y1:0,x2:0,y2:1});
-  grad.appendChild(svg('stop',{offset:'0%','stop-color':'#ffffff','stop-opacity':.10}));
-  grad.appendChild(svg('stop',{offset:'55%','stop-color':'#ffffff','stop-opacity':0}));
-  grad.appendChild(svg('stop',{offset:'100%','stop-color':'#000000','stop-opacity':.16}));
-  defs.appendChild(grad);
-  root.appendChild(defs);
-
-  const gC=svg('g'),gH=svg('g'),gP=svg('g',{class:'port-g'}),gA=svg('g'),gR=svg('g'),gB=svg('g'),gT=svg('g'),gI=svg('g');
-  root.append(gC,gP,gH,gA,gT,gR,gB,gI);
-
-  // island coast rim — unifies the tiles into one landmass
-  for(const h of b.hexes){
-    const cs=hexCorners(h.x,h.y).map(([x,y])=>[h.x+(x-h.x)*1.09,h.y+(y-h.y)*1.09]);
-    gC.appendChild(svg('polygon',{points:cs.map(c=>c.join(',')).join(' '),
-      fill:'#8a7a58',stroke:'#8a7a58','stroke-width':7,'stroke-linejoin':'round'}));
-  }
-
-  const p=curP(S);
-  const robberVictimMode = mode==='robber';
-
-  // hexes
-  const hasImg = typeof TILE_IMG!=='undefined';
-  for(const h of b.hexes){
-    const cs=hexCorners(h.x,h.y);
-    const img=hasImg&&TILE_IMG[h.terrain];
-    const poly=svg('polygon',{points:cs.map(c=>c.join(',')).join(' '),
-      class:'hex'+(!img&&h.id===b.robber?' dim':''),
-      fill:img?'transparent':(h.terrain==='desert'?DESERT_TILE:RES_META[h.terrain].tile)});
-    if(img){
-      const cp=svg('clipPath',{id:'hexclip'+h.id});
-      cp.appendChild(svg('polygon',{points:cs.map(c=>c.join(',')).join(' ')}));
-      defs.appendChild(cp);
-      const ih=2*HEX_SIZE*1.14, iw=ih*1.09; // tile art is slightly wider than tall; overfill hides its rounded corners
-      gH.appendChild(svg('image',{href:img,x:h.x-iw/2,y:h.y-ih/2,width:iw,height:ih,
-        'clip-path':`url(#hexclip${h.id})`,preserveAspectRatio:'none',
-        class:h.id===b.robber?'dim':'', 'pointer-events':'none'}));
-    }
-    if(robberVictimMode&&h.id!==b.robber){
-      poly.style.cursor='pointer';
-      poly.addEventListener('click',()=>onHexTap(h.id));
-      if(!img) poly.style.filter='brightness(1.12)';
-      else poly.setAttribute('fill','rgba(240,199,120,.18)');
-    }
-    gH.appendChild(poly);
-    if(!img){
-      const shade=svg('polygon',{points:cs.map(c=>c.join(',')).join(' '),fill:'url(#hexshade)','pointer-events':'none'});
-      gH.appendChild(shade);
-      const rim=cs.map(([x,y])=>[h.x+(x-h.x)*0.93,h.y+(y-h.y)*0.93]);
-      gH.appendChild(svg('polygon',{points:rim.map(c=>c.join(',')).join(' '),fill:'none',
-        stroke:'rgba(255,255,255,.13)','stroke-width':1.6,'pointer-events':'none',
-        class:h.id===b.robber?'dim':''}));
-      const artG=svg('g',{class:h.id===b.robber?'dim':'', 'pointer-events':'none'});
-      addTerrainArt(artG,h);
-      gA.appendChild(artG);
-    }
-    if(h.num){
-      const hot=h.num===6||h.num===8;
-      const g=svg('g',{class:'token'+(hot?' hot':''),transform:`translate(${h.x},${h.y})`});
-      g.appendChild(svg('circle',{r:17}));
-      const t=svg('text',{y:5,class:'n','font-size':hot?17:15});
-      t.textContent=h.num; g.appendChild(t);
-      const pips=svg('text',{y:13,class:'pips','font-size':7});
-      pips.textContent='•'.repeat(PIPS[h.num]); g.appendChild(pips);
-      gT.appendChild(g);
-    }
-    if(h.id===b.robber){
-      const ox=h.x+(h.num?19:0)-19, oy=h.y-(h.num?26:20);
-      const g=svg('g',{class:'robber-piece',transform:`translate(${ox},${oy}) scale(0.075)`});
-      for(const d of GI.robber) g.appendChild(svg('path',{d,fill:'#20242e',stroke:'#0a0f16','stroke-width':10}));
-      gB.appendChild(g);
-    }
-  }
-
-  // ports
-  for(const port of b.ports){
-    const e=b.E[port.edge];
-    const va=b.V[e.a],vb=b.V[e.b];
-    const mx=(va.x+vb.x)/2,my=(va.y+vb.y)/2;
-    const d=Math.hypot(mx,my)||1;
-    const ox=mx+mx/d*26, oy=my+my/d*26;
-    const g=svg('g',{transform:`translate(${ox},${oy})`});
-    for(const v of [va,vb])
-      gP.appendChild(svg('line',{x1:ox,y1:oy,x2:v.x,y2:v.y,stroke:'rgba(234,228,211,.25)','stroke-width':2,'stroke-dasharray':'3 3'}));
-    const col=port.type==='any'?'#5b7089':RES_META[port.type].col;
-    g.appendChild(svg('circle',{r:13,fill:'#0d1b2a',stroke:col,'stroke-width':2.5,class:'pc'}));
-    const t=svg('text',{y:4});
-    t.style.fill=col;
-    t.textContent=port.type==='any'?'3:1':'2:1';
-    g.appendChild(t);
-    gP.appendChild(g);
-  }
-
-  // roads
-  for(const e of Object.values(b.E)){
-    if(e.road===null) continue;
-    const va=b.V[e.a],vb=b.V[e.b];
-    const t=0.16;
-    gR.appendChild(svg('line',{class:'road',
-      x1:va.x+(vb.x-va.x)*t,y1:va.y+(vb.y-va.y)*t,
-      x2:vb.x+(va.x-vb.x)*t,y2:vb.y+(va.y-vb.y)*t,
-      stroke:S.players[e.road].color}));
-  }
-  // buildings
-  for(const v of Object.values(b.V)){
-    if(!v.bld) continue;
-    const col=S.players[v.bld.p].color;
-    const g=svg('g',{class:'piece',transform:`translate(${v.x},${v.y})`});
-    if(v.bld.type==='sett'){
-      g.appendChild(svg('path',{d:'M -8 8 L -8 -2 L 0 -10 L 8 -2 L 8 8 Z',fill:col,stroke:'#081019','stroke-width':1.6}));
-    } else {
-      g.appendChild(svg('path',{d:'M -11 9 L -11 -3 L -5 -9 L 1 -3 L 1 -1 L 11 -1 L 11 9 Z',fill:col,stroke:'#081019','stroke-width':1.6}));
-      g.appendChild(svg('circle',{cx:6,cy:3,r:1.8,fill:'#081019',opacity:.55}));
-    }
-    gB.appendChild(g);
-  }
-
-  // interactive spots
-  if(!p.bot){
-    if(mode==='setup-sett'||mode==='sett'){
-      for(const vk of settSpots(S,p,mode==='setup-sett')){
-        const v=b.V[vk];
-        const c=svg('circle',{cx:v.x,cy:v.y,r:11,class:'spot'});
-        c.addEventListener('click',()=>onVertexTap(vk));
-        gI.appendChild(c);
-      }
-    }
-    if(mode==='city'){
-      for(const vk of citySpots(S,p)){
-        const v=b.V[vk];
-        const c=svg('circle',{cx:v.x,cy:v.y,r:13,class:'spot'});
-        c.addEventListener('click',()=>onVertexTap(vk));
-        gI.appendChild(c);
-      }
-    }
-    if(mode==='setup-road'||mode==='road'){
-      const opts=mode==='setup-road'?roadSpots(S,p,S.lastSetupSett):roadSpots(S,p,null);
-      for(const ek of opts){
-        const e=b.E[ek];
-        const va=b.V[e.a],vb=b.V[e.b];
-        const t=0.22;
-        const l=svg('line',{class:'edge-spot',
-          x1:va.x+(vb.x-va.x)*t,y1:va.y+(vb.y-va.y)*t,
-          x2:vb.x+(va.x-vb.x)*t,y2:vb.y+(va.y-vb.y)*t});
-        l.addEventListener('click',()=>onEdgeTap(ek));
-        gI.appendChild(l);
-      }
-    }
-  }
+  boardRefresh();
+  renderPick();
+}
+function renderPick(){
+  if(!board) return;
+  const p=S?curP(S):null;
+  if(!S||!p||p.bot){ board.clearPick(); return; }
+  const list=[];
+  const pushV=(vk)=>{ const v=S.board.V[vk]; const w=toWorld(v.x,v.y); list.push({key:vk,wx:w[0],wz:w[1],wy:0.16,cls:'v'}); };
+  const pushE=(ek)=>{ const e=S.board.E[ek]; const a=S.board.V[e.a],b=S.board.V[e.b]; const wa=toWorld(a.x,a.y),wb=toWorld(b.x,b.y); list.push({key:ek,wx:(wa[0]+wb[0])/2,wz:(wa[1]+wb[1])/2,wy:0.14,cls:'e'}); };
+  const pushH=(hid)=>{ const h=S.board.hexes[hid]; const w=toWorld(h.x,h.y); list.push({key:hid,wx:w[0],wz:w[1],wy:0.32,cls:'h'}); };
+  if(mode==='setup-sett'){ for(const vk of settSpots(S,p,true)) pushV(vk); board.setPick(list,vk=>onVertexTap(vk)); }
+  else if(mode==='setup-road'){ for(const ek of roadSpots(S,p,S.lastSetupSett)) pushE(ek); board.setPick(list,ek=>onEdgeTap(ek)); }
+  else if(mode==='sett'){ for(const vk of settSpots(S,p,false)) pushV(vk); board.setPick(list,vk=>onVertexTap(vk)); }
+  else if(mode==='city'){ for(const vk of citySpots(S,p)) pushV(vk); board.setPick(list,vk=>onVertexTap(vk)); }
+  else if(mode==='road'){ for(const ek of roadSpots(S,p,null)) pushE(ek); board.setPick(list,ek=>onEdgeTap(ek)); }
+  else if(mode==='robber'){ for(const h of S.board.hexes){ if(h.id!==S.board.robber) pushH(h.id); } board.setPick(list,hid=>onHexTap(hid)); }
+  else board.clearPick();
 }
 
-/* ---------------- wire up ---------------- */
 function costDots(cost){
   let out='';
   for(const [r,n] of Object.entries(cost)) for(let i=0;i<n;i++) out+=`<i class="cdot" style="background:${RES_META[r].col}"></i>`;
