@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Hexhaven — expansion pieces</title>
+<style>
+  html,body{margin:0;height:100%;background:radial-gradient(ellipse at 50% 42%,#14293f,#0a1523 60%,#070e17);
+    color:#eae4d3;font:13px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  canvas{display:block;touch-action:none;cursor:grab}
+  .hud{position:absolute;left:18px;top:16px;z-index:5;max-width:30ch;background:rgba(13,27,42,.82);
+    backdrop-filter:blur(16px) saturate(1.2);border:1px solid rgba(154,190,225,.16);border-radius:14px;
+    padding:14px 16px;box-shadow:0 14px 34px rgba(0,0,0,.42)}
+  .hud h1{margin:0 0 6px;font:400 16px/1.2 "Iowan Old Style",Palatino,Georgia,serif}
+  .hud p{margin:0;color:#9fb0c2}
+  .lbl{position:absolute;transform:translate(-50%,0);font-size:11px;color:#9fb0c2;white-space:nowrap;
+    text-shadow:0 1px 3px #000;pointer-events:none}
+  .err{position:absolute;left:18px;bottom:16px;z-index:5;color:#e07070;font:11.5px/1.6 ui-monospace,Menlo,monospace;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="hud"><h1>Expansion pieces</h1><p>Ship, knights (3 ranks × active/inactive), wall, metropolis and pirate — with the base pieces for scale. Drag to orbit, scroll to zoom.</p></div>
+<div class="err" id="err"></div>
+<div id="labels"></div>
+<canvas id="c"></canvas>
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.184.0/build/three.module.js';
+import { buildPiece, PIECE_COLORS as C, ROBBER_COLOR } from '../export/pieces3d.js';
+import { buildExpansionPiece } from '../export/pieces3d.expansion.js';
+const err=document.getElementById('err');
+addEventListener('error',e=>err.textContent+=(e.message||e.error)+'\n');
+addEventListener('unhandledrejection',e=>err.textContent+='promise: '+e.reason+'\n');
+
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.shadowMap.enabled=true;
+const scene=new THREE.Scene(); scene.background=null;
+scene.add(new THREE.AmbientLight(0xffffff,1.15));
+const sun=new THREE.DirectionalLight(0xffffff,2.1); sun.position.set(4,8,5); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048); Object.assign(sun.shadow.camera,{left:-6,right:6,top:6,bottom:-6,near:1,far:24}); scene.add(sun);
+const ground=new THREE.Mesh(new THREE.CircleGeometry(9,48),new THREE.MeshStandardMaterial({color:0x123049,roughness:.95}));
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+const camera=new THREE.PerspectiveCamera(38,1,.1,60);
+
+const items=[
+  [buildPiece(THREE,'settlement',{color:C.crimson}),'settlement'],
+  [buildPiece(THREE,'city',{color:C.crimson}),'city'],
+  [buildPiece(THREE,'road',{color:C.crimson}),'road'],
+  [buildPiece(THREE,'robber',{color:ROBBER_COLOR}),'robber'],
+  [buildExpansionPiece(THREE,'ship',{color:C.crimson}),'ship'],
+  [buildExpansionPiece(THREE,'ship',{color:C.azure}),'ship · azure'],
+  [buildExpansionPiece(THREE,'pirate',{}),'pirate'],
+  [buildExpansionPiece(THREE,'metropolis',{color:C.crimson}),'metropolis'],
+  [buildExpansionPiece(THREE,'knight',{color:C.crimson,rank:1,active:true}),'knight 1 · active'],
+  [buildExpansionPiece(THREE,'knight',{color:C.crimson,rank:2,active:true}),'knight 2 · active'],
+  [buildExpansionPiece(THREE,'knight',{color:C.crimson,rank:3,active:true}),'knight 3 · active'],
+  [buildExpansionPiece(THREE,'wall',{color:C.crimson}),'wall'],
+  [buildExpansionPiece(THREE,'knight',{color:C.crimson,rank:1,active:false}),'knight 1 · inactive'],
+  [buildExpansionPiece(THREE,'knight',{color:C.crimson,rank:2,active:false}),'knight 2 · inactive'],
+  [buildExpansionPiece(THREE,'knight',{color:C.crimson,rank:3,active:false}),'knight 3 · inactive'],
+  [buildExpansionPiece(THREE,'metropolis',{color:C.amber}),'metropolis · amber'],
+];
+const COLS=4, GAP=1.1, labelsEl=document.getElementById('labels'), labels=[];
+items.forEach(([g,txt],i)=>{
+  const col=i%COLS, row=(i/COLS)|0;
+  g.position.set((col-(COLS-1)/2)*GAP, 0, (row-1.5)*GAP);
+  g.scale.multiplyScalar(2.0);
+  g.traverse(o=>{ if(o.isMesh && !o.name.endsWith('_glow')){ o.castShadow=true; o.receiveShadow=true; } });
+  scene.add(g);
+  const el=document.createElement('div'); el.className='lbl'; el.textContent=txt; labelsEl.appendChild(el);
+  labels.push({el,pos:new THREE.Vector3(g.position.x,0,g.position.z+0.42)});
+});
+
+let az=0.5, po=1.02, rad=5.6, drag=false, lx=0, ly=0, auto=true;
+canvas.addEventListener('pointerdown',e=>{drag=true;auto=false;lx=e.clientX;ly=e.clientY;canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';});
+canvas.addEventListener('pointermove',e=>{ if(!drag)return; az-=(e.clientX-lx)*.006; po=Math.min(1.4,Math.max(.25,po-(e.clientY-ly)*.005)); lx=e.clientX; ly=e.clientY; });
+const stop=()=>{drag=false;canvas.style.cursor='grab';};
+addEventListener('pointerup',stop); addEventListener('pointercancel',stop);
+canvas.addEventListener('wheel',e=>{e.preventDefault();rad=Math.min(14,Math.max(3.5,rad*(1+e.deltaY*.0012)));},{passive:false});
+const target=new THREE.Vector3(0,0.35,0);
+function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); return [w,h]; }
+function frame(){
+  const [w,h]=resize();
+  if(auto) az+=0.0008;
+  camera.position.set(target.x+rad*Math.sin(po)*Math.sin(az), target.y+rad*Math.cos(po), target.z+rad*Math.sin(po)*Math.cos(az));
+  camera.lookAt(target);
+  renderer.render(scene,camera);
+  for(const L of labels){ const v=L.pos.clone().project(camera); L.el.style.left=((v.x*.5+.5)*w)+'px'; L.el.style.top=((-v.y*.5+.5)*h)+'px'; L.el.style.opacity=v.z>1?0:1; }
+}
+renderer.setAnimationLoop(frame);
+window.__gallery={scene,items:items.length};
+window.__setView=(a,p,r)=>{az=a;po=p;rad=r;auto=false;};
+</script>
+</body>
+</html>
