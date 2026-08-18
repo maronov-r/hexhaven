@@ -51,23 +51,34 @@ function hexCorners(cx,cy){
 const vkey = (x,y)=>Math.round(x)+','+Math.round(y);
 const ekey = (a,b)=> a<b ? a+'|'+b : b+'|'+a;
 
-function buildBoard(layout){
-  // 19 hexes, axial radius 2, pointy-top
+function buildBoard(layout, radius){
+  radius = radius || 2;                        // 2=Standard(19) · 3=Large(37) · 4=Huge(61)
   const hexes=[];
-  for(let q=-2;q<=2;q++) for(let r=-2;r<=2;r++){
-    if(Math.abs(q+r)<=2){
+  for(let q=-radius;q<=radius;q++) for(let r=-radius;r<=radius;r++){
+    if(Math.abs(q+r)<=radius){
       const x=HEX_SIZE*Math.sqrt(3)*(q+r/2), y=HEX_SIZE*1.5*r;
       hexes.push({id:hexes.length,q,r,x,y,terrain:null,num:null});
     }
   }
-  // terrain pool
-  let terr = shuffle(['wood','wood','wood','wood','sheep','sheep','sheep','sheep','wheat','wheat','wheat','wheat','brick','brick','brick','ore','ore','ore','desert']);
+  const N=hexes.length;
+  // terrain pool — ~1 desert per 19 hexes, resources in the classic 4:4:4:3:3 ratio, scaled
+  const deserts=Math.max(1,Math.round(N/19));
+  const landN=N-deserts;
+  const ratio={wood:4,sheep:4,wheat:4,brick:3,ore:3};
+  const counts={}; let assigned=0;
+  for(const k of RES){ counts[k]=Math.round(landN*ratio[k]/18); assigned+=counts[k]; }
+  for(let i=0; assigned!==landN; i++){ const k=RES[i%RES.length], d=Math.sign(landN-assigned); if(counts[k]+d<0) continue; counts[k]+=d; assigned+=d; }
+  const pool=[];
+  for(const k of RES) for(let i=0;i<counts[k];i++) pool.push(k);
+  for(let i=0;i<deserts;i++) pool.push('desert');
+  const terr=shuffle(pool);
   hexes.forEach((h,i)=>h.terrain=terr[i]);
 
   // number placement
   const ring = h => (Math.abs(h.q)+Math.abs(h.r)+Math.abs(h.q+h.r))/2;
   const neighborsOf = h => hexes.filter(o=>o!==h && (Math.abs(o.q-h.q)+Math.abs(o.r-h.r)+Math.abs(o.q+o.r-h.q-h.r))/2===1);
-  if(layout==='spiral'){
+  const landCount = hexes.filter(h=>h.terrain!=='desert').length;
+  if(layout==='spiral' && radius===2){
     // classic variable setup: numbers laid in a spiral, guarantees no adjacent 6/8
     const seq=[5,2,6,3,8,10,9,12,11,4,8,10,9,4,5,6,3,11];
     const byRing=[2,1,0].map(rr=>hexes.filter(h=>ring(h)===rr)
@@ -76,10 +87,12 @@ function buildBoard(layout){
     let k=0;
     for(const h of order){ if(h.terrain==='desert') continue; h.num=seq[k++]; }
   } else {
-    // random; 'balanced' retries until no two red (6/8) numbers touch
-    const nums=[2,3,3,4,4,5,5,6,6,8,8,9,9,10,10,11,11,12];
-    for(let attempt=0;attempt<500;attempt++){
-      const bag=shuffle(nums); let k=0;
+    // weighted number bag (Catan frequencies), scaled to the land-hex count
+    const W=[[2,1],[3,2],[4,2],[5,2],[6,2],[8,2],[9,2],[10,2],[11,2],[12,1]];
+    const base=[]; for(const [n,w] of W) for(let i=0;i<w;i++) base.push(n);
+    const makeBag=()=>{ const bag=[]; while(bag.length<landCount) bag.push(...shuffle(base)); return shuffle(bag).slice(0,landCount); };
+    for(let attempt=0;attempt<400;attempt++){
+      const bag=makeBag(); let k=0;
       hexes.forEach(h=>{ h.num = h.terrain==='desert'?null:bag[k++]; });
       if(layout!=='balanced') break;
       const bad = hexes.some(h=>(h.num===6||h.num===8) && neighborsOf(h).some(n=>n.num===6||n.num===8));
@@ -118,15 +131,18 @@ function buildBoard(layout){
     if(!nxt) break;
     chain.push(nxt); used.add(nxt.k);
   }
-  const portTypes=shuffle(['any','any','any','any','wood','brick','sheep','wheat','ore']);
-  const slots=[0,3,7,10,14,17,20,24,27];
+  // ~1 harbour per 3.3 coastal edges, evenly spaced; one of each resource then 'any'
+  const nPorts=Math.max(4, Math.round(chain.length/3.3));
+  const specifics=shuffle(['wood','brick','sheep','wheat','ore']);
+  const portTypes=shuffle(Array.from({length:nPorts},(_,i)=> i<specifics.length?specifics[i]:'any'));
   const ports=[];
-  slots.forEach((s,i)=>{
-    if(!chain[s]) return;
-    const e=chain[s], t=portTypes[i];
+  for(let i=0;i<nPorts;i++){
+    const e=chain[Math.round(i*chain.length/nPorts)];
+    if(!e) continue;
+    const t=portTypes[i];
     V[e.a].port=t; V[e.b].port=t;
     ports.push({edge:e.k,type:t});
-  });
+  }
 
   const desert=hexes.find(h=>h.terrain==='desert');
   return {hexes,V,E,ports,robber:desert.id};
@@ -135,6 +151,10 @@ function buildBoard(layout){
 /* ---------------- game state ---------------- */
 function newGame(settings){
   const n=settings.bots+1;
+  // scale the bank and dev deck to the board so bigger maps don't run dry
+  const _rad=settings.mapSize||2, _N=1+3*_rad*(_rad+1), _land=_N-Math.max(1,Math.round(_N/19));
+  const bankN=Math.max(19,Math.round(19*_land/18));
+  const devMul=Math.max(1,Math.round(_land/18));
   const colors=PLAYER_COLORS.slice();
   const me=colors.splice(settings.colorIdx,1)[0];
   const botCols=shuffle(colors).slice(0,settings.bots);
@@ -149,13 +169,13 @@ function newGame(settings){
     p.playedDevThisTurn=false;
   }
   const devDeck=shuffle([
-    ...Array(14).fill('knight'), ...Array(5).fill('vp'),
-    ...Array(2).fill('road'), ...Array(2).fill('plenty'), ...Array(2).fill('mono'),
+    ...Array(14*devMul).fill('knight'), ...Array(5*devMul).fill('vp'),
+    ...Array(2*devMul).fill('road'), ...Array(2*devMul).fill('plenty'), ...Array(2*devMul).fill('mono'),
   ]);
   const order = shuffle(players.map(p=>p.i));
   const S={
-    settings, players, board:buildBoard(settings.layout),
-    bank:{wood:19,brick:19,sheep:19,wheat:19,ore:19}, devDeck,
+    settings, players, board:buildBoard(settings.layout, settings.mapSize),
+    bank:{wood:bankN,brick:bankN,sheep:bankN,wheat:bankN,ore:bankN}, devDeck,
     order, turnPtr:0,
     phase:'setup',
     setupQueue:[...order, ...order.slice().reverse()],

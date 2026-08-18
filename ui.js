@@ -32,7 +32,7 @@ const SAVE_KEY='hexhaven-save-v1', SET_KEY='hexhaven-settings-v1';
 const DEFAULT_SETTINGS={
   name:'You', colorIdx:0, bots:3, difficulty:'standard', target:10,
   layout:'spiral', friendlyRobber:false, botTrades:true, speed:'normal',
-  expWild:false,
+  expWild:false, mapSize:2,
 };
 let settings=loadSettings();
 let S=null;            // game state
@@ -174,6 +174,7 @@ function renderSetup(){
     <div><div class="field-lab">Rivals</div>${seg('bots',[{v:1,l:'1'},{v:2,l:'2'},{v:3,l:'3'}],s.bots)}</div>
     <div><div class="field-lab">Bot skill</div>${seg('difficulty',[{v:'casual',l:'Casual'},{v:'standard',l:'Standard'},{v:'cutthroat',l:'Cutthroat'}],s.difficulty)}</div>
     <div><div class="field-lab">Points to win</div>${seg('target',[{v:8,l:'8'},{v:10,l:'10'},{v:12,l:'12'}],s.target)}</div>
+    <div><div class="field-lab">Map size<small>Standard 19 · Large 37 · Huge 61 hexes</small></div>${seg('mapSize',[{v:2,l:'Standard'},{v:3,l:'Large'},{v:4,l:'Huge'}],s.mapSize)}</div>
     <div><div class="field-lab">Island layout<small>Spiral is the classic numbering — no hot spots touching</small></div>${seg('layout',[{v:'spiral',l:'Spiral'},{v:'balanced',l:'Balanced'},{v:'random',l:'Chaos'}],s.layout)}</div>
     <div><div class="field-lab">Friendly robber<small>No stealing from players under 3 points</small></div>${seg('friendlyRobber',[{v:false,l:'Off'},{v:true,l:'On'}],s.friendlyRobber)}</div>
     <div><div class="field-lab">Bots may offer you trades</div>${seg('botTrades',[{v:false,l:'Off'},{v:true,l:'On'}],s.botTrades)}</div>
@@ -185,7 +186,7 @@ function renderSetup(){
       b.classList.add('on');
       const raw=b.dataset.v, key=g.dataset.seg;
       draft[key]= raw==='true'?true: raw==='false'?false: isNaN(+raw)?raw:+raw;
-      if(key==='bots'||key==='layout'||key==='expWild') reDeal();
+      if(key==='bots'||key==='layout'||key==='expWild'||key==='mapSize') reDeal();
     });
   });
   $('set-colors').querySelectorAll('.swatch').forEach(b=>b.onclick=()=>{

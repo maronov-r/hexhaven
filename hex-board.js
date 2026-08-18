@@ -145,7 +145,7 @@ class HexBoard extends HTMLElement {
   /** Distance that frames the island plus its water ring in the usable region. */
   _fit() {
     if (this._userZoom) return;
-    const worldR = 2.9, w = this._w || 1, h = this._h || 1;
+    const worldR = this._worldR || 2.9, w = this._w || 1, h = this._h || 1;
     const usableW = Math.max(220, w - (this._inset || 0));
     const usableH = Math.max(180, h - (this._insetY || 0));
     const vf = Math.tan((this._camera.fov * Math.PI / 180) / 2);
@@ -202,12 +202,20 @@ class HexBoard extends HTMLElement {
       if (h.num) this._addChip(h, x, z);
     }
 
-    // water ring, with harbours sitting where the engine put its ports
+    // water ring, with harbours sitting where the engine put its ports.
+    // ring sits one step outside the largest land ring, so it adapts to map size.
     const ports = this._portHexes(S);
     const land = new Set(S.board.hexes.map(h => h.q + ',' + h.r));
-    for (let q = -3; q <= 3; q++) for (let r = -3; r <= 3; r++) {
-      if (Math.abs(q + r) > 3) continue;
-      if ((Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2 !== 3) continue;
+    const R = S.board.hexes.reduce((m, h) => Math.max(m, (Math.abs(h.q) + Math.abs(h.r) + Math.abs(h.q + h.r)) / 2), 0);
+    const WR = R + 1;
+    // world radius that frames the whole island + its water ring (drives the camera fit)
+    { let mr = 0; for (const [q, r] of [[WR, 0], [0, WR], [-WR, WR], [-WR, 0], [0, -WR], [WR, -WR]]) {
+        const [wx, wz] = toWorld(HEX_SIZE * Math.sqrt(3) * (q + r / 2), HEX_SIZE * 1.5 * r);
+        mr = Math.max(mr, Math.hypot(wx, wz)); }
+      this._worldR = mr + 0.55; }
+    for (let q = -WR; q <= WR; q++) for (let r = -WR; r <= WR; r++) {
+      if (Math.abs(q + r) > WR) continue;
+      if ((Math.abs(q) + Math.abs(r) + Math.abs(q + r)) / 2 !== WR) continue;
       const key = q + ',' + r;
       if (land.has(key)) continue;
       const [x, z] = toWorld(HEX_SIZE * Math.sqrt(3) * (q + r / 2), HEX_SIZE * 1.5 * r);
