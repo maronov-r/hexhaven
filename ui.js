@@ -580,16 +580,17 @@ function openTrade(){
   if(p.bot||!S.rolled) return;
   const give={wood:0,brick:0,sheep:0,wheat:0,ore:0}, get={wood:0,brick:0,sheep:0,wheat:0,ore:0};
   openSheet(`<h2>Trade</h2>
-    <div class="sub rates">Bank rates: ${RES.map(r=>`<span class="rd" title="${RES_META[r].label}"><i style="background:${RES_META[r].col}"></i></span><span class="num">${rateFor(S,p,r)}:1</span>`).join(' ')}</div>
+    <div class="sub">Give resources at the bank rate shown on each row (e.g. <b>4:1</b> = give 4 to get 1), or offer a swap to a rival.</div>
     <div class="trade-mid">You give</div><div class="trade-grid give" id="tg"></div>
     <div class="trade-mid">You get</div><div class="trade-grid get" id="tr"></div>
+    <div class="trade-summary" id="t-sum"></div>
     <div class="sheet-actions">
       <button class="btn" id="t-bank" disabled>Bank</button>
       <button class="btn" id="t-players" disabled ${S.players.length<2?'style="display:none"':''}>Offer rivals</button>
       <button class="btn ghost" id="t-close">Close</button>
     </div>`);
   const row=(side,obj,max)=>RES.map(r=>`
-    <div class="trow"><div class="rname"><span class="sw" style="background:${RES_META[r].col}"></span>${RES_META[r].label}${side==='g'?` <span class="num" style="color:var(--dim)">×${p.res[r]}</span>`:''}</div>
+    <div class="trow"><div class="rname"><span class="sw" style="background:${RES_META[r].col}"></span>${RES_META[r].label}${side==='g'?` <span class="num" style="color:var(--dim)">×${p.res[r]}</span> <span class="rate-tag" title="bank rate">${rateFor(S,p,r)}:1</span>`:''}</div>
     <div class="stepper"><button data-s="${side}" data-r="${r}" data-d="-1" ${obj[r]<=0?'disabled':''}>−</button><span class="v num">${obj[r]}</span><button data-s="${side}" data-r="${r}" data-d="1" ${side==='g'&&obj[r]>=p.res[r]?'disabled':''}${side==='r'&&obj[r]>=S.bank[r]?'disabled':''}>+</button></div></div>`).join('');
   const bankValid=()=>{
     let credits=0;
@@ -603,9 +604,17 @@ function openTrade(){
     return credits>0&&want===credits&&RES.every(r=>get[r]<=S.bank[r])&&sum(give)>0;
   };
   const offerValid=()=>sum(give)>0&&sum(get)>0&&RES.every(r=>give[r]===0||get[r]===0);
+  const summaryText=()=>{
+    if(sum(give)===0&&sum(get)===0) return 'Choose what to give and what to get.';
+    const note = bankValid() ? '<span style="color:var(--good)">Bank trade ready</span>'
+      : offerValid() ? '<span style="color:var(--good)">Ready to offer rivals</span>'
+      : '<span style="color:var(--dim)">For the bank, give exact multiples of each rate that add up to what you get.</span>';
+    return `Give ${fmtBundle(give)} &nbsp;→&nbsp; get ${fmtBundle(get)}<br><small>${note}</small>`;
+  };
   const draw=()=>{
     $('tg').innerHTML=row('g',give);
     $('tr').innerHTML=row('r',get);
+    $('t-sum').innerHTML=summaryText();
     $('t-bank').disabled=!bankValid();
     $('t-players').disabled=!offerValid();
     $('sheet').querySelectorAll('.stepper button').forEach(b=>b.onclick=()=>{

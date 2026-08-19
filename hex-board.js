@@ -15,7 +15,8 @@ const K = (R * SC) / HEX_SIZE;          // game px → world units
 const KIND = { wood: 'forest', brick: 'hills', sheep: 'pasture', wheat: 'fields', ore: 'mountains', desert: 'desert', sea: 'sea' };
 const NEIGHBOURS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
 // the engine's flat player colours → their neon-glow equivalents
-const NEON = { '#e0555a': 0xff4d5e, '#4c9ee3': 0x3fa9ff, '#e8e4d8': 0xf2f0e6, '#e58f3c': 0xffa32e };
+const NEON = { '#e0555a': 0xff4d5e, '#4c9ee3': 0x3fa9ff, '#e8e4d8': 0xf2f0e6, '#e58f3c': 0xffa32e,
+  '#3bb6a6': 0x2ff2d8, '#9b6ee0': 0xa96bff, '#e05ea6': 0xff44b8, '#86c447': 0xc6ff3d };
 const toWorld = (x, y) => [x * K, y * K];
 const neon = css => NEON[String(css).toLowerCase()] ?? parseInt(String(css).slice(1), 16);
 const spin = () => Math.floor(Math.random() * 6) * STEP;

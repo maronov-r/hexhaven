@@ -209,7 +209,7 @@ body[data-screen=game] .sc-game{display:block}
 .seg button{flex:1;padding:8px 4px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--dim);
   background:var(--panel);border:1px solid var(--line2)}
 .seg button.on{background:var(--brass);color:var(--brass-ink);border-color:transparent}
-.swatches{display:flex;gap:8px}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
 .swatch{width:38px;height:30px;border-radius:8px;border:2px solid rgba(154,190,225,.2)}
 .swatch.on{border-color:var(--brass)}
 input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:9px 12px;width:100%}
@@ -378,7 +378,7 @@ input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-r
 .seg button{padding:6px 11px;border-radius:8px;font-size:13px;font-weight:600;color:var(--dim)}
 .seg button.on{background:var(--brass);color:var(--brass-ink)}
 input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:9px 12px;width:150px}
-.swatches{display:flex;gap:8px}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
 .swatch{width:30px;height:30px;border-radius:50%;border:2px solid transparent}
 .swatch.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--sea1) inset}
 
@@ -392,6 +392,9 @@ input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-r
 .stepper button:disabled{opacity:.3}
 .stepper .v{width:26px;text-align:center;font-weight:700}
 .give .stepper .v{color:var(--bad)}.get .stepper .v{color:var(--good)}
+.rate-tag{display:inline-block;font-size:10.5px;font-weight:700;color:var(--brass);background:rgba(224,177,94,.14);border:1px solid rgba(224,177,94,.35);border-radius:6px;padding:1px 5px;margin-left:4px;font-variant-numeric:tabular-nums}
+.trade-summary{margin:12px 0 2px;font-size:13px;color:var(--ink);text-align:center;line-height:1.5}
+.trade-summary small{color:var(--dim);font-size:11.5px}
 .trade-mid{display:flex;align-items:center;gap:10px;margin:8px 0;color:var(--faint);font-size:12px;text-transform:uppercase;letter-spacing:.1em}
 .trade-mid::before,.trade-mid::after{content:"";flex:1;height:1px;background:var(--line)}
 .partner-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
@@ -500,6 +503,10 @@ const PLAYER_COLORS = [
   {id:'azure',   hex:'#4c9ee3'},
   {id:'ivory',   hex:'#e8e4d8'},
   {id:'amber',   hex:'#e58f3c'},
+  {id:'teal',    hex:'#3bb6a6'},
+  {id:'violet',  hex:'#9b6ee0'},
+  {id:'rose',    hex:'#e05ea6'},
+  {id:'lime',    hex:'#86c447'},
 ];
 const BOT_NAMES = ['Bruna','Otto','Sable','Wren','Idris','Marta'];
 const PIPS = {2:1,3:2,4:3,5:4,6:5,8:5,9:4,10:3,11:2,12:1};
@@ -1842,16 +1849,17 @@ function openTrade(){
   if(p.bot||!S.rolled) return;
   const give={wood:0,brick:0,sheep:0,wheat:0,ore:0}, get={wood:0,brick:0,sheep:0,wheat:0,ore:0};
   openSheet(`<h2>Trade</h2>
-    <div class="sub rates">Bank rates: ${RES.map(r=>`<span class="rd" title="${RES_META[r].label}"><i style="background:${RES_META[r].col}"></i></span><span class="num">${rateFor(S,p,r)}:1</span>`).join(' ')}</div>
+    <div class="sub">Give resources at the bank rate shown on each row (e.g. <b>4:1</b> = give 4 to get 1), or offer a swap to a rival.</div>
     <div class="trade-mid">You give</div><div class="trade-grid give" id="tg"></div>
     <div class="trade-mid">You get</div><div class="trade-grid get" id="tr"></div>
+    <div class="trade-summary" id="t-sum"></div>
     <div class="sheet-actions">
       <button class="btn" id="t-bank" disabled>Bank</button>
       <button class="btn" id="t-players" disabled ${S.players.length<2?'style="display:none"':''}>Offer rivals</button>
       <button class="btn ghost" id="t-close">Close</button>
     </div>`);
   const row=(side,obj,max)=>RES.map(r=>`
-    <div class="trow"><div class="rname"><span class="sw" style="background:${RES_META[r].col}"></span>${RES_META[r].label}${side==='g'?` <span class="num" style="color:var(--dim)">×${p.res[r]}</span>`:''}</div>
+    <div class="trow"><div class="rname"><span class="sw" style="background:${RES_META[r].col}"></span>${RES_META[r].label}${side==='g'?` <span class="num" style="color:var(--dim)">×${p.res[r]}</span> <span class="rate-tag" title="bank rate">${rateFor(S,p,r)}:1</span>`:''}</div>
     <div class="stepper"><button data-s="${side}" data-r="${r}" data-d="-1" ${obj[r]<=0?'disabled':''}>−</button><span class="v num">${obj[r]}</span><button data-s="${side}" data-r="${r}" data-d="1" ${side==='g'&&obj[r]>=p.res[r]?'disabled':''}${side==='r'&&obj[r]>=S.bank[r]?'disabled':''}>+</button></div></div>`).join('');
   const bankValid=()=>{
     let credits=0;
@@ -1865,9 +1873,17 @@ function openTrade(){
     return credits>0&&want===credits&&RES.every(r=>get[r]<=S.bank[r])&&sum(give)>0;
   };
   const offerValid=()=>sum(give)>0&&sum(get)>0&&RES.every(r=>give[r]===0||get[r]===0);
+  const summaryText=()=>{
+    if(sum(give)===0&&sum(get)===0) return 'Choose what to give and what to get.';
+    const note = bankValid() ? '<span style="color:var(--good)">Bank trade ready</span>'
+      : offerValid() ? '<span style="color:var(--good)">Ready to offer rivals</span>'
+      : '<span style="color:var(--dim)">For the bank, give exact multiples of each rate that add up to what you get.</span>';
+    return `Give ${fmtBundle(give)} &nbsp;→&nbsp; get ${fmtBundle(get)}<br><small>${note}</small>`;
+  };
   const draw=()=>{
     $('tg').innerHTML=row('g',give);
     $('tr').innerHTML=row('r',get);
+    $('t-sum').innerHTML=summaryText();
     $('t-bank').disabled=!bankValid();
     $('t-players').disabled=!offerValid();
     $('sheet').querySelectorAll('.stepper button').forEach(b=>b.onclick=()=>{

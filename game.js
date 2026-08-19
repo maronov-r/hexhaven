@@ -29,6 +29,10 @@ const PLAYER_COLORS = [
   {id:'azure',   hex:'#4c9ee3'},
   {id:'ivory',   hex:'#e8e4d8'},
   {id:'amber',   hex:'#e58f3c'},
+  {id:'teal',    hex:'#3bb6a6'},
+  {id:'violet',  hex:'#9b6ee0'},
+  {id:'rose',    hex:'#e05ea6'},
+  {id:'lime',    hex:'#86c447'},
 ];
 const BOT_NAMES = ['Bruna','Otto','Sable','Wren','Idris','Marta'];
 const PIPS = {2:1,3:2,4:3,5:4,6:5,8:5,9:4,10:3,11:2,12:1};

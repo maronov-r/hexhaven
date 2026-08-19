@@ -97,7 +97,7 @@ body[data-screen=game] .sc-game{display:block}
 .seg button{flex:1;padding:8px 4px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--dim);
   background:var(--panel);border:1px solid var(--line2)}
 .seg button.on{background:var(--brass);color:var(--brass-ink);border-color:transparent}
-.swatches{display:flex;gap:8px}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
 .swatch{width:38px;height:30px;border-radius:8px;border:2px solid rgba(154,190,225,.2)}
 .swatch.on{border-color:var(--brass)}
 input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:9px 12px;width:100%}
@@ -266,7 +266,7 @@ input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-r
 .seg button{padding:6px 11px;border-radius:8px;font-size:13px;font-weight:600;color:var(--dim)}
 .seg button.on{background:var(--brass);color:var(--brass-ink)}
 input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:9px 12px;width:150px}
-.swatches{display:flex;gap:8px}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
 .swatch{width:30px;height:30px;border-radius:50%;border:2px solid transparent}
 .swatch.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--sea1) inset}
 
@@ -280,6 +280,9 @@ input[type=text]{background:var(--panel2);border:1px solid var(--line2);border-r
 .stepper button:disabled{opacity:.3}
 .stepper .v{width:26px;text-align:center;font-weight:700}
 .give .stepper .v{color:var(--bad)}.get .stepper .v{color:var(--good)}
+.rate-tag{display:inline-block;font-size:10.5px;font-weight:700;color:var(--brass);background:rgba(224,177,94,.14);border:1px solid rgba(224,177,94,.35);border-radius:6px;padding:1px 5px;margin-left:4px;font-variant-numeric:tabular-nums}
+.trade-summary{margin:12px 0 2px;font-size:13px;color:var(--ink);text-align:center;line-height:1.5}
+.trade-summary small{color:var(--dim);font-size:11.5px}
 .trade-mid{display:flex;align-items:center;gap:10px;margin:8px 0;color:var(--faint);font-size:12px;text-transform:uppercase;letter-spacing:.1em}
 .trade-mid::before,.trade-mid::after{content:"";flex:1;height:1px;background:var(--line)}
 .partner-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
