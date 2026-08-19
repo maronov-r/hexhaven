@@ -21,6 +21,8 @@ const toWorld = (x, y) => [x * K, y * K];
 const neon = css => NEON[String(css).toLowerCase()] ?? parseInt(String(css).slice(1), 16);
 const spin = () => Math.floor(Math.random() * 6) * STEP;
 const PIPS = { 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1 };
+const PORT_LABEL = { wood:'LUMBER', brick:'BRICK', sheep:'WOOL', wheat:'GRAIN', ore:'ORE', any:'ANY' };
+const PORT_COL = { wood:'#3e7c4f', brick:'#c4633f', sheep:'#8fbf6a', wheat:'#e2b84b', ore:'#7c8ca6', any:'#5b7089' };
 
 const CHIP_CSS = `
 @keyframes hb-pop{0%{box-shadow:0 0 0 0 rgba(224,177,94,.9)}70%{box-shadow:0 0 0 14px rgba(224,177,94,0)}100%{box-shadow:0 0 0 0 rgba(224,177,94,0)}}
@@ -34,6 +36,10 @@ const CHIP_CSS = `
 .hb-chip i span{width:2.5px;height:2.5px;border-radius:50%;background:currentColor;display:block}
 .hb-chip.hot{animation:hb-pop 1s ease-out}
 .hb-robber{filter:saturate(.4) brightness(.62)}
+.hb-port{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;padding:2px 6px 3px;border-radius:8px;background:rgba(8,16,25,.86);border:1px solid rgba(154,190,225,.28);transform-origin:50% 50%;box-shadow:0 2px 6px rgba(0,0,0,.5);line-height:1;pointer-events:none}
+.hb-port b{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:12px;color:#e0b15e;font-weight:600}
+.hb-port em{font-size:6.5px;font-style:normal;letter-spacing:.08em;color:#9fb0c2;margin-top:1px}
+.hb-port i{width:16px;height:2.5px;border-radius:2px;margin-top:2px}
 `;
 
 class HexBoard extends HTMLElement {
@@ -57,6 +63,7 @@ class HexBoard extends HTMLElement {
     this.appendChild(this._overlay);
 
     this._az = 0; this._po = 0.82; this._rad = 5.3; this._inset = 0; this._insetY = 0; this._shiftPx = 0;
+    this._portChips = [];
     this._target = new THREE.Vector3(0, 0.05, 0);
     this._chips = [];
     this._life = { eagles: [], wings: [], flocks: [], canopies: [], boats: [], choppers: [], grass: [] };
@@ -173,6 +180,7 @@ class HexBoard extends HTMLElement {
     for (const k in this._life) this._life[k].length = 0;
     this._overlay.textContent = '';
     this._chips = [];
+    this._portChips = [];
     this._terrain = new THREE.Group();
     this._buildTerrain();
     this._scene.add(this._terrain);
@@ -226,6 +234,7 @@ class HexBoard extends HTMLElement {
       const [lx, lz] = toWorld(port.land.x, port.land.y);
       const ux = lx - x, uz = lz - z, len = Math.hypot(ux, uz) || 1;
       this._addTile('harbor', x, z, Math.round(Math.atan2(-uz / len, ux / len) / STEP) * STEP);
+      this._addPortChip(port.type, x + ux / len * 0.28, z + uz / len * 0.28);
     }
   }
 
@@ -337,8 +346,22 @@ class HexBoard extends HTMLElement {
     }
   }
 
+  _addPortChip(type, x, z) {
+    const el = document.createElement('div');
+    el.className = 'hb-port';
+    const ratio = type === 'any' ? '3:1' : '2:1';
+    el.innerHTML = `<b>${ratio}</b><em>${PORT_LABEL[type] || 'ANY'}</em><i style="background:${PORT_COL[type] || '#5b7089'}"></i>`;
+    this._overlay.appendChild(el);
+    this._portChips.push({ el, pos: new THREE.Vector3(x, 0.18, z) });
+  }
   _syncChips() {
     const scale = Math.min(1.15, Math.max(0.42, 4.6 / this._rad));
+    for (const c of (this._portChips || [])) {
+      const v = c.pos.clone().project(this._camera);
+      const x = (v.x * 0.5 + 0.5) * this._w, y = (-v.y * 0.5 + 0.5) * this._h;
+      c.el.style.transform = `translate(-50%,-50%) translate(${x}px,${y}px) scale(${Math.min(1.0, scale)})`;
+      c.el.style.opacity = v.z > 1 ? '0' : '1';
+    }
     for (const c of this._chips) {
       const v = c.pos.clone().project(this._camera);
       const x = (v.x * 0.5 + 0.5) * this._w, y = (-v.y * 0.5 + 0.5) * this._h;
