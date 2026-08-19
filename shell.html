@@ -55,20 +55,21 @@
 <!-- ============ GAME CHROME ============ -->
 <section class="scrn sc-game" id="sc-game">
 
-  <!-- header -->
-  <div class="g-header glass" id="g-header">
-    <svg class="crest" width="26" height="26" viewBox="0 0 100 100" aria-hidden="true">
-      <polygon points="50,4 90,27 90,73 50,96 10,73 10,27" fill="none" stroke="#e0b15e" stroke-width="6"/>
-      <polygon points="50,20 76,35 76,65 50,80 24,65 24,35" fill="#12233a" stroke="#e0b15e" stroke-width="3"/>
-      <path d="M 38 58 L 38 46 L 50 36 L 62 46 L 62 58 Z" fill="#e0b15e"/>
-    </svg>
-    <span class="wordmark head-word">HEX<em>HAVEN</em></span>
-    <div class="turn-pill" id="turnflag"></div>
+  <!-- minimal top bar: turn + rivals + menu -->
+  <div class="topbar" id="g-header">
+    <div class="turn-pill glass" id="turnflag"></div>
+    <div class="rival-strip" id="opponents"></div>
     <span class="spacer"></span>
-    <span class="first-to" id="first-to"></span>
-    <button class="hbtn" id="btn-new-island">New island</button>
-    <button class="hbtn brasslink" id="btn-hide">Hide panels</button>
-    <button class="iconbtn" id="g-menu" aria-label="Menu" data-ico="menu"></button>
+    <button class="iconbtn glass" id="g-menu" aria-label="Menu" data-ico="menu"></button>
+  </div>
+
+  <!-- game menu popover -->
+  <div class="popover glass" id="gamemenu" hidden>
+    <button class="pop-item" id="btn-new-island">New island</button>
+    <button class="pop-item" id="btn-rules-g">How to play</button>
+    <button class="pop-item" id="btn-hide">Focus mode</button>
+    <div class="pop-sep"></div>
+    <button class="pop-item" id="btn-tomenu">Main menu</button>
   </div>
 
   <!-- self-fading chronicle -->
@@ -77,32 +78,32 @@
   <!-- hint pill -->
   <div class="hint-pill" id="hint">Welcome to the island</div>
 
-  <!-- rival strip -->
-  <div class="rival-strip" id="opponents"></div>
-
   <!-- dice -->
   <div class="dice-panel glass" id="dicebox"></div>
 
-  <!-- dock -->
-  <div class="dock glass" id="dock">
-    <button class="dock-handle" id="dock-handle" aria-label="Drag to collapse or expand"><span></span></button>
-    <div class="dock-id" id="me-line"></div>
-    <div class="dock-scroll">
-      <div class="hand" id="hand"></div>
-      <div class="build-grid">
-        <button class="act" id="act-road"><span class="ic" data-ico="road"></span><span class="al">Road</span><span class="cost" data-cost="road"></span></button>
-        <button class="act" id="act-sett"><span class="ic" data-ico="house"></span><span class="al">Settle</span><span class="cost" data-cost="sett"></span></button>
-        <button class="act" id="act-city"><span class="ic" data-ico="city"></span><span class="al">City</span><span class="cost" data-cost="city"></span></button>
-        <button class="act" id="act-dev"><span class="ic" data-ico="scroll"></span><span class="al">Dev card</span><span class="cost" data-cost="dev"></span></button>
-        <button class="act" id="act-ship" style="display:none"><span class="ic" data-ico="ship"></span><span class="al">Ship</span><span class="cost" data-cost="ship"></span></button>
-      </div>
+  <!-- build popover (opens above the bar) -->
+  <div class="buildpop glass" id="buildpop" hidden>
+    <div class="bp-id" id="me-line"></div>
+    <div class="build-grid">
+      <button class="act" id="act-road"><span class="ic" data-ico="road"></span><span class="al">Road</span><span class="cost" data-cost="road"></span></button>
+      <button class="act" id="act-sett"><span class="ic" data-ico="house"></span><span class="al">Settle</span><span class="cost" data-cost="sett"></span></button>
+      <button class="act" id="act-city"><span class="ic" data-ico="city"></span><span class="al">City</span><span class="cost" data-cost="city"></span></button>
+      <button class="act" id="act-dev"><span class="ic" data-ico="scroll"></span><span class="al">Dev card</span><span class="cost" data-cost="dev"></span></button>
+      <button class="act" id="act-ship" style="display:none"><span class="ic" data-ico="ship"></span><span class="al">Ship</span><span class="cost" data-cost="ship"></span></button>
     </div>
-    <div class="dock-foot">
-      <button class="btn primary" id="btn-roll"><span data-ico="die"></span> Roll dice</button>
-      <div class="foot-row">
-        <button class="btn" id="btn-trade"><span data-ico="coins"></span> Trade</button>
-        <button class="btn ghost" id="btn-end">End turn</button>
-      </div>
+    <!-- #devwrap is inserted here by renderDock -->
+  </div>
+
+  <!-- bottom command bar -->
+  <div class="cmdbar glass" id="dock">
+    <button class="dock-handle" id="dock-handle" aria-label="Drag to collapse or expand"><span></span></button>
+    <span class="bar-vp num" id="bar-vp"></span>
+    <div class="hand" id="hand"></div>
+    <div class="bar-acts">
+      <button class="btn build" id="btn-build"><span data-ico="house"></span> Build</button>
+      <button class="btn" id="btn-trade"><span data-ico="coins"></span> Trade</button>
+      <button class="btn primary" id="btn-roll"><span data-ico="die"></span> Roll</button>
+      <button class="btn ghost" id="btn-end">End</button>
     </div>
   </div>
 </section>

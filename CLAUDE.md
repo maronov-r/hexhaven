@@ -92,13 +92,22 @@ The look is **"night sea table"**: a dark teal ocean with a warm brass accent, s
 
 **Typography/voice:** clean and quiet. Serif for display/numbers, sans for body. No hype.
 
-## Mobile (both orientations must work — the map is the selling point)
+## Board-first chrome (the layout — the island is the whole game)
 
-- **Portrait:** rival strip on top, board fills the middle, dock is a **draggable bottom sheet** (`#dock-handle` → `setDockCollapsed`). Drag/tap the handle to collapse it to a slim bar so the whole island shows.
-- **Landscape:** compact side dock on the right, board on the left.
+The chrome is deliberately minimal so the 3D island owns the screen on phone, tablet, and desktop alike. There is **one layout for all sizes**, only the sizing changes:
+
+- **Top rail** (`.topbar`, transparent — only the pills catch the pointer): the turn pill (`#turnflag`) on the left, compact **rival chips** (`#opponents` → dot + VP; hover/`.active` expands to show the full meta) filling the middle, and the menu button (`#g-menu`) on the right.
+- **Bottom command bar** (`.cmdbar`, id `#dock`): your VP (`#bar-vp`), your **resource hand** as compact pills (`#hand` → `.rescard`), then the action cluster — **Build / Trade / Roll / End**. This is the only always-on panel.
+- **Build tray** (`.buildpop`, id `#buildpop`): opens *above* the bar via **Build** (`#btn-build`). Holds the 5 build actions (`.act`), the stock/badge line (`#me-line`), and the dev-card section (`#devwrap`, appended here by `renderDock`). Choosing a legal action (or buying/playing a dev card) **auto-closes the tray** so the island is clear for placement. A tap on the board (`#board3d` pointerdown) also dismisses open popovers.
+- **Game menu** (`.popover`, id `#gamemenu`): opens from `#g-menu`. Holds New island / How to play / **Focus mode** (`#btn-hide`) / Main menu (`#btn-tomenu`).
+- **Focus mode** toggles `body.panels-hidden` — hides the bar, rails, chronicle, and dice (keeps `#g-menu` so you can restore) and reframes the camera to fill the screen. Label flips to "Show board".
+- Popover helpers live in `ui.js`: `togglePop/closePop/closePops`. The bar can still collapse on portrait via the drag handle (`#dock-handle` → `setDockCollapsed`) to hide the hand row.
+
+## Mobile / camera (both orientations must work)
+
 - **Board input** (`hex-board.js _bindInput`): **one finger = orbit, two fingers = pinch zoom.** Pointer releases are listened on `window` so a finger lifted off-canvas can't wedge it into permanent zoom (this was a real bug — don't reintroduce it by moving the listener back to the canvas). `_userZoom` suspends auto-framing after a manual zoom.
-- **Hide panels** button toggles `body.panels-hidden` (really hides dock + strip) and reframes the camera to fill the screen.
-- Camera framing per screen/orientation is computed in `ui.js` `gameView()` / `menuView()`; a debounced `resize` listener re-applies it.
+- Camera framing is computed in `ui.js` `gameView()` (reserves top rail + bottom bar as `insetY`, so the island frames itself between them) / `menuView()`; a debounced `resize` listener re-applies it. `setPanels(insetX, insetY, shiftPx)` on the board does the reframe.
+- **Portrait:** rival chips scroll in a single row up top; the command bar wraps (VP+actions, then hand). **Landscape phone:** the bar stays thin so the board still dominates.
 
 ---
 

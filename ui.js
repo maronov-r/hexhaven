@@ -82,13 +82,15 @@ function afterAnyRoll(){
   }
 }
 
-const MENU_VIEW=[420,60,-210], GAME_VIEW=[354,152,170];
+const MENU_VIEW=[420,60,-210];
 function gameView(){
-  const w=innerWidth,h=innerHeight;
-  if(w>=820 && h>=520) return GAME_VIEW;
-  if(w>h && h<=560) return [Math.min(250,Math.round(w*0.34)),30,120];  // landscape phone: side dock
-  const collapsed=document.getElementById("dock")&&document.getElementById("dock").classList.contains("collapsed");
-  return [0, 62 + Math.round(h*(collapsed?0.12:0.5)), 0];              // portrait: reserve header/strip + bottom sheet
+  // board-first: one thin bar at the bottom, thin rail on top. Reserve their
+  // heights (top rail + command bar) so the island frames itself in between.
+  const h=innerHeight;
+  const dock=document.getElementById("dock");
+  const collapsed=dock&&dock.classList.contains("collapsed");
+  const bar=collapsed?54:(h<=560?92:118);   // command-bar footprint
+  return [0, 84 + bar, 0];                    // 84 ≈ top rail + breathing room
 }
 function setDockCollapsed(on){ const d=$("dock"); if(!d)return; d.classList.toggle("collapsed",on); if(screen==="game") setView(panelsHidden?[0,0,0]:gameView()); }
 function initDock(){
@@ -134,11 +136,16 @@ function boot(){
   $('btn-continue').onclick=()=>{ try{ S=JSON.parse(localStorage.getItem(SAVE_KEY)); if(!S) return; boardNewIsland(S); startResume(); }catch(e){} };
   $('btn-settings').onclick=()=>showSetup(false);
   $('btn-rules').onclick=openRules;
-  $('g-menu').onclick=()=>{ stopBots(); saveGame(); show('menu'); };
-  $('btn-new-island').onclick=()=>{ showSetup(true); };
-  $('btn-hide').onclick=togglePanels;
+  $('g-menu').onclick=(e)=>{ e.stopPropagation(); closePop('buildpop'); togglePop('gamemenu'); };
+  $('btn-tomenu').onclick=()=>{ closePops(); stopBots(); saveGame(); show('menu'); };
+  $('btn-new-island').onclick=()=>{ closePops(); showSetup(true); };
+  $('btn-rules-g').onclick=()=>{ closePops(); openRules(); };
+  $('btn-hide').onclick=()=>{ closePops(); togglePanels(); };
+  $('btn-build').onclick=(e)=>{ e.stopPropagation(); closePop('gamemenu'); togglePop('buildpop'); };
   $('setup-back').onclick=()=>show('menu');
   $('log').onclick=()=>$('log').classList.toggle('open');
+  // any tap on the island (or elsewhere) dismisses open popovers
+  document.getElementById('board3d').addEventListener('pointerdown',closePops);
   if(window.__hexBoard) attachBoard(window.__hexBoard);
   initDock();
   let rzT; window.addEventListener("resize",()=>{ clearTimeout(rzT); rzT=setTimeout(()=>{ if(screen==="game") setView(panelsHidden?[0,0,0]:gameView()); else if(screen==="menu"||screen==="setup") setView(menuView()); },160); });
@@ -146,7 +153,6 @@ function boot(){
 }
 function startResume(){
   panelsHidden=false; document.body.classList.remove('panels-hidden');
-  $('first-to').textContent='First to '+S.settings.target+' points';
   show('game'); renderAll(); advance();
 }
 function refreshMenu(){ const has=hasSave(); $('btn-continue').disabled=!has; $('btn-continue').style.opacity=has?'1':'.4'; }
@@ -154,9 +160,14 @@ function refreshMenu(){ const has=hasSave(); $('btn-continue').disabled=!has; $(
 function togglePanels(){
   panelsHidden=!panelsHidden;
   document.body.classList.toggle('panels-hidden',panelsHidden);
-  $('btn-hide').textContent=panelsHidden?'Show panels':'Hide panels';
+  $('btn-hide').textContent=panelsHidden?'Show board':'Focus mode';
   setView(panelsHidden?[0,0,0]:gameView());
 }
+
+/* lightweight popovers (game menu + build tray) */
+function closePop(id){ const p=$(id); if(p) p.hidden=true; }
+function closePops(){ closePop('gamemenu'); closePop('buildpop'); }
+function togglePop(id){ const p=$(id); if(p) p.hidden=!p.hidden; }
 
 /* ---------------- setup screen ---------------- */
 function showSetup(fromNew){
@@ -250,7 +261,6 @@ function startGame(){
   const first=S.players[S.setupQueue[0]];
   log(S,`<b>${first.name}</b> places first`,true);
   panelsHidden=false; document.body.classList.remove('panels-hidden');
-  $('first-to').textContent='First to '+S.settings.target+' points';
   show('game');
   renderAll(); saveGame();
   advance();
@@ -443,6 +453,7 @@ function toggleMode(m){
   if(mode==='sett') hint('Tap a highlighted corner to build a settlement');
   if(mode==='city') hint('Tap one of your settlements to upgrade');
   if(!mode) hint('Build, trade, or end your turn');
+  if(mode) closePops();   // clear the tray so the island is visible for placement
   renderAll();
 }
 function onVertexTap(vk){
@@ -492,11 +503,13 @@ function onBuyDev(){
   if(!S.rolled||!canAfford(p,COST.dev)||!S.devDeck.length) return;
   const c=buyDev(S,p);
   hint(`You drew: ${DEV_META[c].label}`);
+  closePops();
   renderAll(); winOrContinue();
 }
 function onPlayDev(card){
   const p=curP(S);
   if(p.bot||p.playedDevThisTurn||!p.dev.includes(card)||card==='vp') return;
+  closePops();
   if(!S.rolled&&card!=='knight') return; // only knight may be played before rolling
   if(card==='knight'){ playDev(S,p,card); renderAll(); if(checkWin(S)){showGameOver();return;} beginRobber(); return; }
   if(card==='road'){
@@ -859,6 +872,7 @@ function renderDock(){
   const me=S.players[0];
   const myTurn=curP(S).i===0;
   $('dock').classList.toggle('active',myTurn);
+  if(!myTurn) closePop('buildpop');   // no build tray on a rival's turn
   const badges=[];
   if(S.longestRoad.owner===0) badges.push(ico('road',12)+' Longest Road');
   if(S.largestArmy.owner===0) badges.push(ico('sword',12)+' Largest Army');
@@ -867,6 +881,7 @@ function renderDock(){
     <span class="spacer"></span>
     <span class="me-stats num">${badges.length?`<span class="mybadge">${badges.join(' · ')}</span>`:''}<span title="settlements left">${ico('house',13)} <b>${me.stock.sett}</b></span><span title="cities left">${ico('city',13)} <b>${me.stock.city}</b></span><span title="roads left">${ico('road',13)} <b>${me.stock.road}</b></span></span>
     <span class="me-vp num">${vp(S,me,true)} VP</span>`;
+  const bv=$('bar-vp'); if(bv) bv.innerHTML=`${vp(S,me,true)}<span style="font-size:11px;color:var(--dim)"> VP</span>`;
 
   // hand
   const hand=$('hand'); hand.innerHTML='';
@@ -874,14 +889,15 @@ function renderDock(){
     const c=el('div','rescard'+(me.res[r]===0?' zero':'')+(flashRes.has(r)?' bump':''));
     c.style.setProperty('--rc',RES_META[r].col);
     c.style.animationDelay=(idx*60)+'ms';
-    c.innerHTML=`<span class="ic">${resIconHTML(r,24)}</span><span class="ct num">${me.res[r]}</span><span class="lb">${RES_META[r].label}</span>`;
+    c.title=`${me.res[r]} ${RES_META[r].label}`;
+    c.innerHTML=`<span class="ic">${resIconHTML(r,20)}</span><span class="ct num">${me.res[r]}</span><span class="lb">${RES_META[r].label}</span>`;
     hand.appendChild(c);
   });
   flashRes.clear();
 
   // dev section
   let dw=$('devwrap');
-  if(!dw){ dw=el('div','devwrap'); dw.id='devwrap'; hand.after(dw); }
+  if(!dw){ dw=el('div','devwrap'); dw.id='devwrap'; $('buildpop').appendChild(dw); }
   const groups={};
   me.dev.forEach(c=>groups[c]=(groups[c]||0)+1);
   me.newdev.forEach(c=>{groups[c]=(groups[c]||0)+1; groups['_new_'+c]=(groups['_new_'+c]||0)+1;});
