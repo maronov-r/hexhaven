@@ -36,10 +36,11 @@ const CHIP_CSS = `
 .hb-chip i span{width:2.5px;height:2.5px;border-radius:50%;background:currentColor;display:block}
 .hb-chip.hot{animation:hb-pop 1s ease-out}
 .hb-robber{filter:saturate(.4) brightness(.62)}
-.hb-port{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;padding:2px 6px 3px;border-radius:8px;background:rgba(8,16,25,.86);border:1px solid rgba(154,190,225,.28);transform-origin:50% 50%;box-shadow:0 2px 6px rgba(0,0,0,.5);line-height:1;pointer-events:none}
+.hb-port{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;padding:2px 6px 3px;border-radius:8px;background:rgba(8,16,25,.86);border:1px solid rgba(154,190,225,.28);transform-origin:50% 50%;box-shadow:0 2px 6px rgba(0,0,0,.5);line-height:1;pointer-events:auto;cursor:default;transition:background .15s,border-color .15s}
 .hb-port b{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:12px;color:#e0b15e;font-weight:600}
 .hb-port em{font-size:6.5px;font-style:normal;letter-spacing:.08em;color:#9fb0c2;margin-top:1px}
 .hb-port i{width:16px;height:2.5px;border-radius:2px;margin-top:2px}
+.hb-port.hovered{border-color:#e0b15e;background:rgba(12,22,34,.96);box-shadow:0 5px 14px rgba(0,0,0,.6)}
 `;
 
 class HexBoard extends HTMLElement {
@@ -352,15 +353,22 @@ class HexBoard extends HTMLElement {
     const ratio = type === 'any' ? '3:1' : '2:1';
     el.innerHTML = `<b>${ratio}</b><em>${PORT_LABEL[type] || 'ANY'}</em><i style="background:${PORT_COL[type] || '#5b7089'}"></i>`;
     this._overlay.appendChild(el);
-    this._portChips.push({ el, pos: new THREE.Vector3(x, 0.18, z) });
+    const chip = { el, pos: new THREE.Vector3(x, 0.18, z), hover: false, hs: 1 };
+    el.addEventListener('pointerenter', () => { chip.hover = true; });
+    el.addEventListener('pointerleave', () => { chip.hover = false; });
+    this._portChips.push(chip);
   }
   _syncChips() {
     const scale = Math.min(1.15, Math.max(0.42, 4.6 / this._rad));
     for (const c of (this._portChips || [])) {
       const v = c.pos.clone().project(this._camera);
       const x = (v.x * 0.5 + 0.5) * this._w, y = (-v.y * 0.5 + 0.5) * this._h;
-      c.el.style.transform = `translate(-50%,-50%) translate(${x}px,${y}px) scale(${Math.min(1.0, scale)})`;
+      const target = c.hover ? 2.4 : Math.min(1.0, scale);
+      c.hs += (target - c.hs) * 0.25;                      // ease the hover grow/shrink
+      c.el.style.transform = `translate(-50%,-50%) translate(${x}px,${y}px) scale(${c.hs})`;
       c.el.style.opacity = v.z > 1 ? '0' : '1';
+      c.el.style.zIndex = c.hover ? '5' : '';
+      c.el.classList.toggle('hovered', c.hover);
     }
     for (const c of this._chips) {
       const v = c.pos.clone().project(this._camera);
