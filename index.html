@@ -1929,7 +1929,6 @@ function openTrade(){
       <div class="stepper"><button data-s="r" data-r="${r}" data-d="-1">−</button><span class="v num" id="rv-${r}">${get[r]}</span><button data-s="r" data-r="${r}" data-d="1">+</button></div>
     </div>`;
   const editorHTML=()=>`<h2>Trade</h2>
-    <div class="sub">Everything's here — dial give and get on each row. Rate (e.g. <b>4:1</b>) is the bank cost.</div>
     <div class="trade2" id="t2">
       <div class="t2head"><span>Give</span><span>Resource</span><span>Get</span></div>
       ${RES.map(rowHTML).join('')}
