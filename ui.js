@@ -591,20 +591,9 @@ function openDiscard(p){
 function openTrade(){
   const p=curP(S);
   if(p.bot||!S.rolled) return;
+  // one persistent offer — survives a rival's rejection so you just tweak and re-offer
   const give={wood:0,brick:0,sheep:0,wheat:0,ore:0}, get={wood:0,brick:0,sheep:0,wheat:0,ore:0};
-  openSheet(`<h2>Trade</h2>
-    <div class="sub">Give resources at the bank rate shown on each row (e.g. <b>4:1</b> = give 4 to get 1), or offer a swap to a rival.</div>
-    <div class="trade-mid">You give</div><div class="trade-grid give" id="tg"></div>
-    <div class="trade-mid">You get</div><div class="trade-grid get" id="tr"></div>
-    <div class="trade-summary" id="t-sum"></div>
-    <div class="sheet-actions">
-      <button class="btn" id="t-bank" disabled>Bank</button>
-      <button class="btn" id="t-players" disabled ${S.players.length<2?'style="display:none"':''}>Offer rivals</button>
-      <button class="btn ghost" id="t-close">Close</button>
-    </div>`);
-  const row=(side,obj,max)=>RES.map(r=>`
-    <div class="trow"><div class="rname"><span class="sw" style="background:${RES_META[r].col}"></span>${RES_META[r].label}${side==='g'?` <span class="num" style="color:var(--dim)">×${p.res[r]}</span> <span class="rate-tag" title="bank rate">${rateFor(S,p,r)}:1</span>`:''}</div>
-    <div class="stepper"><button data-s="${side}" data-r="${r}" data-d="-1" ${obj[r]<=0?'disabled':''}>−</button><span class="v num">${obj[r]}</span><button data-s="${side}" data-r="${r}" data-d="1" ${side==='g'&&obj[r]>=p.res[r]?'disabled':''}${side==='r'&&obj[r]>=S.bank[r]?'disabled':''}>+</button></div></div>`).join('');
+
   const bankValid=()=>{
     let credits=0;
     for(const r of RES){
@@ -618,35 +607,66 @@ function openTrade(){
   };
   const offerValid=()=>sum(give)>0&&sum(get)>0&&RES.every(r=>give[r]===0||get[r]===0);
   const summaryText=()=>{
-    if(sum(give)===0&&sum(get)===0) return 'Choose what to give and what to get.';
+    if(sum(give)===0&&sum(get)===0) return 'Add what you give and get below.';
     const note = bankValid() ? '<span style="color:var(--good)">Bank trade ready</span>'
       : offerValid() ? '<span style="color:var(--good)">Ready to offer rivals</span>'
       : '<span style="color:var(--dim)">For the bank, give exact multiples of each rate that add up to what you get.</span>';
     return `Give ${fmtBundle(give)} &nbsp;→&nbsp; get ${fmtBundle(get)}<br><small>${note}</small>`;
   };
-  const draw=()=>{
-    $('tg').innerHTML=row('g',give);
-    $('tr').innerHTML=row('r',get);
+
+  // compact single-box editor: one row per resource, give | resource | get
+  const rowHTML=r=>`
+    <div class="t2row">
+      <div class="stepper"><button data-s="g" data-r="${r}" data-d="-1">−</button><span class="v num" id="gv-${r}">${give[r]}</span><button data-s="g" data-r="${r}" data-d="1">+</button></div>
+      <div class="t2res"><span class="sw" style="background:${RES_META[r].col}"></span><b>${RES_META[r].label}</b><span class="t2have num">×${p.res[r]}</span><span class="rate-tag" title="bank rate">${rateFor(S,p,r)}:1</span></div>
+      <div class="stepper"><button data-s="r" data-r="${r}" data-d="-1">−</button><span class="v num" id="rv-${r}">${get[r]}</span><button data-s="r" data-r="${r}" data-d="1">+</button></div>
+    </div>`;
+  const editorHTML=()=>`<h2>Trade</h2>
+    <div class="sub">Everything's here — dial give and get on each row. Rate (e.g. <b>4:1</b>) is the bank cost.</div>
+    <div class="trade2" id="t2">
+      <div class="t2head"><span>Give</span><span>Resource</span><span>Get</span></div>
+      ${RES.map(rowHTML).join('')}
+    </div>
+    <div class="trade-summary" id="t-sum"></div>
+    <div class="sheet-actions">
+      <button class="btn" id="t-bank" disabled>Bank trade</button>
+      <button class="btn" id="t-players" disabled ${S.players.length<2?'style="display:none"':''}>Offer rivals</button>
+      <button class="btn ghost" id="t-close">Close</button>
+    </div>`;
+
+  const refresh=()=>{
+    for(const r of RES){ $('gv-'+r).textContent=give[r]; $('rv-'+r).textContent=get[r]; }
+    $('sheet').querySelectorAll('.stepper button').forEach(b=>{
+      const r=b.dataset.r, o=b.dataset.s==='g'?give:get, d=+b.dataset.d;
+      b.disabled = d<0 ? o[r]<=0 : (b.dataset.s==='g' ? o[r]>=p.res[r] : o[r]>=S.bank[r]);
+    });
     $('t-sum').innerHTML=summaryText();
     $('t-bank').disabled=!bankValid();
     $('t-players').disabled=!offerValid();
+  };
+  const showEditor=note=>{
+    openSheet(editorHTML());
     $('sheet').querySelectorAll('.stepper button').forEach(b=>b.onclick=()=>{
       const o=b.dataset.s==='g'?give:get;
       o[b.dataset.r]=Math.max(0,o[b.dataset.r]+ +b.dataset.d);
-      draw();
+      refresh();
     });
+    $('t-close').onclick=closeSheet;
+    $('t-bank').onclick=doBank;
+    $('t-players').onclick=doOffer;
+    refresh();
+    if(note) $('t-sum').innerHTML=note;
   };
-  draw();
-  $('t-close').onclick=closeSheet;
-  $('t-bank').onclick=()=>{
+  const doBank=()=>{
     for(const r of RES){ p.res[r]-=give[r]; S.bank[r]+=give[r]; }
     for(const r of RES){ S.bank[r]-=get[r]; p.res[r]+=get[r]; }
     log(S,`<b>${p.name}</b> traded with the bank`);
     closeSheet(); renderAll(); saveGame();
   };
-  $('t-players').onclick=()=>{
+  const doOffer=()=>{
     const bots=S.players.filter(o=>o.bot);
     const answers=bots.map(b=>({p:b,yes:botEvaluateOffer(S,b,give,get)}));
+    const anyYes=answers.some(a=>a.yes);
     openSheet(`<h2>Your offer</h2>
       <div class="sub">Give ${fmtBundle(give)} for ${fmtBundle(get)}</div>
       <div class="partner-list">${answers.map(a=>`
@@ -654,13 +674,16 @@ function openTrade(){
           <span class="dot" style="background:${a.p.color}"></span><b>${a.p.name}</b>
           <span class="st" style="color:${a.yes?'var(--good)':'var(--bad)'}">${a.yes?'Accepts':'Declines'}</span>
         </button>`).join('')}</div>
-      <div class="sheet-actions"><button class="btn ghost" id="t-back">Never mind</button></div>`);
-    $('t-back').onclick=closeSheet;
+      <div class="sheet-actions"><button class="btn ghost" id="t-adjust">${anyYes?'← Back to offer':'← Adjust & retry'}</button></div>`);
+    // returns to the SAME editor with give/get intact — no re-setup after a rejection
+    $('t-adjust').onclick=()=>showEditor(anyYes?null:'<span style="color:var(--bad)">No takers — tweak the offer and try again.</span>');
     $('sheet').querySelectorAll('.partner:not([disabled])').forEach(b=>b.onclick=()=>{
       playerTrade(S,p,S.players[+b.dataset.i],give,get);
       closeSheet(); renderAll(); saveGame();
     });
   };
+
+  showEditor();
 }
 function fmtBundle(o){
   const parts=RES.filter(r=>o[r]>0).map(r=>`<b class="num">${o[r]}</b> ${RES_META[r].label}`);
