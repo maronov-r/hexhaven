@@ -377,10 +377,11 @@ body.panels-hidden .dice-panel{opacity:0}
   .topbar .spacer{display:none}
   .turn-pill{order:0}
   #g-menu{order:1;margin-left:auto}
-  .rival-strip{order:2;flex-basis:100%;flex-wrap:wrap;overflow:visible;margin-top:2px}
-  .rival .name{display:none}
-  .rival{padding:6px 9px}
-  .hint-pill{top:108px}   /* clear the two-row top bar (turn pill + rivals) */
+  .rival-strip{order:2;flex-basis:100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:2px;gap:5px}
+  .rival{padding:5px 9px;flex:none}
+  .rival .name{max-width:74px}   /* keep names (important for online play), ellipsis if long */
+  .rival .vp{font-size:15px}
+  .hint-pill{top:112px}          /* just below the single-row top bar (turn pill + named rivals) */
   .cmdbar{flex-wrap:wrap;justify-content:center}
   .bar-vp{order:0}
   .hand{order:2;flex-basis:100%;justify-content:center}
