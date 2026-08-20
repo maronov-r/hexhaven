@@ -102,7 +102,7 @@ class HexBoard extends HTMLElement {
     const el = this._canvas;
     const pts = new Map();               // active pointers by id
     let lastDist = 0;
-    const MINR = 2.4, MAXR = 15;
+    const MINR = 2.4;
     const twoDist = () => { const a = [...pts.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
     const down = e => {
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -115,7 +115,7 @@ class HexBoard extends HTMLElement {
       if (pts.size === 2) {                       // exactly two fingers -> pinch zoom
         p.x = e.clientX; p.y = e.clientY;
         const d = twoDist();
-        if (lastDist && d) { this._userZoom = true; this._rad = Math.min(MAXR, Math.max(MINR, this._rad * (lastDist / d))); }
+        if (lastDist && d) { this._userZoom = true; this._rad = Math.min(this._maxOut(), Math.max(MINR, this._rad * (lastDist / d))); }
         lastDist = d;
       } else if (pts.size === 1) {                // one finger -> orbit / look around
         this._az -= (e.clientX - p.x) * 0.006;
@@ -138,7 +138,7 @@ class HexBoard extends HTMLElement {
     el.addEventListener('wheel', e => {
       e.preventDefault();
       this._userZoom = true;
-      this._rad = Math.min(MAXR, Math.max(MINR, this._rad * (1 + e.deltaY * 0.0012)));
+      this._rad = Math.min(this._maxOut(), Math.max(MINR, this._rad * (1 + e.deltaY * 0.0012)));
     }, { passive: false });
   }
 
@@ -152,6 +152,18 @@ class HexBoard extends HTMLElement {
     this._resize();
   }
 
+  /** Farthest the camera may pull back: enough to fit the whole island across the
+   *  NARROWER screen axis (portrait needs much more distance than landscape), plus
+   *  margin. Adapts to aspect + map size so big maps stay fully zoom-out-able. */
+  _maxOut() {
+    const vf = Math.tan((this._camera.fov * Math.PI / 180) / 2) || 0.34;
+    const aspect = (this._w || 1) / (this._h || 1);
+    const worldR = (this._worldR || 2.9);
+    const dW = worldR / (vf * Math.max(0.28, aspect)); // fit across width
+    const dH = worldR / vf;                            // fit across height
+    return Math.min(55, Math.max(16, Math.max(dW, dH) * 1.35));
+  }
+
   /** Distance that frames the island plus its water ring in the usable region. */
   _fit() {
     if (this._userZoom) return;
@@ -161,7 +173,7 @@ class HexBoard extends HTMLElement {
     const vf = Math.tan((this._camera.fov * Math.PI / 180) / 2);
     // half-extent visible across the usable box, expressed against the full frame
     const d = worldR * h / (vf * Math.min(usableW, usableH));
-    this._rad = Math.min(18, Math.max(2.4, d * 1.02));
+    this._rad = Math.min(this._maxOut(), Math.max(2.4, d * 1.02));
   }
 
   _resize() {

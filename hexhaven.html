@@ -488,15 +488,23 @@ body.panels-hidden .dice-panel{opacity:0}
 /* PORTRAIT phone: rivals wrap on top, thin command bar, collapsible */
 @media (max-width:820px) and (orientation:portrait){
   .dock-handle{display:flex}
-  .rival-strip{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* rivals get their own full-width row under the turn pill, so ALL players show */
+  .topbar{flex-wrap:wrap}
+  .topbar .spacer{display:none}
+  .turn-pill{order:0}
+  #g-menu{order:1;margin-left:auto}
+  .rival-strip{order:2;flex-basis:100%;flex-wrap:wrap;overflow:visible;margin-top:2px}
   .rival .name{display:none}
   .rival{padding:6px 9px}
+  .hint-pill{top:108px}   /* clear the two-row top bar (turn pill + rivals) */
   .cmdbar{flex-wrap:wrap;justify-content:center}
   .bar-vp{order:0}
   .hand{order:2;flex-basis:100%;justify-content:center}
   .bar-acts{order:1;margin-left:auto}
   .cmdbar.collapsed .hand{display:none}
-  .buildpop{bottom:132px}
+  .buildpop{bottom:210px}
+  /* keep the dice above the (taller, wrapped) bottom bar instead of behind it */
+  .dice-panel{bottom:200px}
   .rescard{flex-basis:56px;height:50px}
 }
 /* LANDSCAPE phone: keep the bar thin so the board still dominates */
