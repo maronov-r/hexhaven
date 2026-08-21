@@ -401,3 +401,11 @@ body.panels-hidden .dice-panel{opacity:0}
   .dice-panel{bottom:78px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* dev mode (?dev) — brass badge so it's obvious the expansions are unlocked */
+body[data-dev="1"][data-screen=menu]::after,
+body[data-dev="1"][data-screen=setup]::after{
+  content:"DEV · EXPANSIONS UNLOCKED";position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
+  z-index:60;font:600 10px/1 var(--sans);letter-spacing:.14em;color:var(--brass);
+  background:rgba(13,27,42,.74);backdrop-filter:blur(16px) saturate(1.2);
+  border:1px solid var(--line);border-radius:8px;padding:6px 10px;pointer-events:none;white-space:nowrap}

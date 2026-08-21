@@ -517,6 +517,14 @@ body.panels-hidden .dice-panel{opacity:0}
   .dice-panel{bottom:78px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* dev mode (?dev) — brass badge so it's obvious the expansions are unlocked */
+body[data-dev="1"][data-screen=menu]::after,
+body[data-dev="1"][data-screen=setup]::after{
+  content:"DEV · EXPANSIONS UNLOCKED";position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
+  z-index:60;font:600 10px/1 var(--sans);letter-spacing:.14em;color:var(--brass);
+  background:rgba(13,27,42,.74);backdrop-filter:blur(16px) saturate(1.2);
+  border:1px solid var(--line);border-radius:8px;padding:6px 10px;pointer-events:none;white-space:nowrap}
 </style>
 <script>
 /* ================= HEXHAVEN ENGINE ================= */
@@ -1352,8 +1360,19 @@ const DEFAULT_SETTINGS={
   expWild:false, mapSize:2, expSea:false,
 };
 let settings=loadSettings();
-// Expansions are dev-only for now — visible in setup only with ?dev in the URL.
-const DEV = /(?:\?|&)dev\b/.test(location.search);
+// Expansions are dev-only for now. Unlocked by ?dev (also ?developer, or #dev) in the URL.
+// The unlock sticks in localStorage, so a query string lost to a redirect (GitHub Pages
+// bounces /hexhaven?dev to /hexhaven/ and drops it) can't silently re-lock them.
+// Clear it with ?dev=off.
+const DEV_KEY='hexhaven-dev-v1';
+const DEV=(()=>{
+  const q=(location.search+' '+location.hash).toLowerCase();
+  try{
+    if(/[?&#]dev(eloper)?\b\s*=\s*(0|off|false|no)\b/.test(q)){ localStorage.removeItem(DEV_KEY); return false; }
+    if(/[?&#]dev(eloper)?\b/.test(q)){ localStorage.setItem(DEV_KEY,'1'); return true; }
+    return localStorage.getItem(DEV_KEY)==='1';
+  }catch(e){ return /[?&#]dev(eloper)?\b/.test(q); }   // private mode: URL only
+})();
 let S=null;            // game state
 let mode=null;         // board interaction mode
 let botTimer=null;
@@ -1448,6 +1467,7 @@ function setLoad(flag){
 
 function boot(){
   document.body.dataset.screen='loading';
+  if(DEV) document.body.dataset.dev='1';   // brass DEV badge on menu + setup
   $('btn-new').onclick=()=>showSetup(true);
   $('btn-continue').onclick=()=>{ try{ S=JSON.parse(localStorage.getItem(SAVE_KEY)); if(!S) return; boardNewIsland(S); startResume(); }catch(e){} };
   $('btn-settings').onclick=()=>showSetup(false);
@@ -1512,7 +1532,7 @@ function renderSetup(){
     <div><div class="field-lab">Bot pace</div>${seg('speed',[{v:'relaxed',l:'Relaxed'},{v:'normal',l:'Normal'},{v:'fast',l:'Fast'}],s.speed)}</div>
     ${DEV?`<div class="field-lab" style="color:var(--brass);letter-spacing:.1em;margin-top:6px">EXPANSIONS · DEV</div>
     <div><div class="field-lab">Wild &amp; Wonders<small>Gold Field, volcano, oasis, jungle, swamp + trade post, ruins &amp; monument</small></div>${seg('expWild',[{v:false,l:'Off'},{v:true,l:'On'}],s.expWild)}</div>
-    <div><div class="field-lab">Voyages<small>Splits the map into two islands — build ships across the sea (🌲+🐑)</small></div>${seg('expSea',[{v:false,l:'Off'},{v:true,l:'On'}],s.expSea)}</div>`:''}`;
+    <div><div class="field-lab">Voyages<small>Splits the map into two islands — build ships across the sea (wood + sheep)</small></div>${seg('expSea',[{v:false,l:'Off'},{v:true,l:'On'}],s.expSea)}</div>`:''}`;
   $('setup-body').querySelectorAll('[data-seg]').forEach(g=>{
     g.querySelectorAll('button').forEach(b=>b.onclick=()=>{
       g.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
@@ -1528,7 +1548,10 @@ function renderSetup(){
   });
   $('setup-go').onclick=()=>{
     draft.name=$('set-name').value.trim()||'You';
-    settings={...draft}; saveSettings();
+    const keepW=settings.expWild, keepS=settings.expSea;
+    settings={...draft};
+    if(!DEV){ settings.expWild=keepW; settings.expSea=keepS; }   // keep dev prefs, play base
+    saveSettings();
     startGame();
   };
 }
