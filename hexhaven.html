@@ -1610,9 +1610,10 @@ function show(name){
   screen=name;
   document.body.dataset.screen=name;
   if(board&&board.setSpin) board.setSpin(name==='game'?0:0.045);
+  if(board&&board.resetView) board.resetView();   // every screen change starts from a framed island
   if(name==='menu'){ refreshMenu(); setInsets(menuInsets()); }
   else if(name==='setup') setInsets(menuInsets());
-  else if(name==='game'){ if(board&&board.resetView) board.resetView(); requestAnimationFrame(syncChrome); }
+  else if(name==='game') requestAnimationFrame(syncChrome);
 }
 
 /* ---------------- loading ---------------- */
@@ -1830,7 +1831,7 @@ function stopBots(){ if(botTimer){ clearTimeout(botTimer); timers.delete(botTime
 function beginPlayerSetup(){
   if(S.setupStep==='sett'){
     mode='setup-sett';
-    hint('Place a settlement — numbers show each spot’s production');
+    hint('Place a settlement — numbers show each spot’s yield');
   } else {
     mode='setup-road';
     hint('Place a road next to it');

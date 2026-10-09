@@ -26,7 +26,7 @@ const PIPS = { 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1 };
 const PORT_LABEL = { wood:'LUMBER', brick:'BRICK', sheep:'WOOL', wheat:'GRAIN', ore:'ORE', any:'ANY' };
 const PORT_COL = { wood:'#3e7c4f', brick:'#c4633f', sheep:'#8fbf6a', wheat:'#e2b84b', ore:'#7c8ca6', any:'#5b7089' };
 const PIECE_SCALE = { settlement: 1.95, city: 1.8, road: 1.3, robber: 1.75 };
-const PO_DEFAULT = 0.8, PO_MIN = 0.2, PO_MAX = 1.3, MINR = 1.6;
+const PO_DEFAULT = 0.8, PO_MIN = 0.22, PO_MAX = 1.42, MINR = 1.6;
 const ease = { outBack: k => { const c = 1.6; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); },
   outCubic: k => 1 - Math.pow(1 - k, 3), inOut: k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2 };
 
@@ -89,7 +89,8 @@ class HexBoard extends HTMLElement {
     this._cRad = 6; this._vAz = 0; this._vPo = 0;
     this._ins = { top: 0, right: 0, bottom: 0, left: 0 };
     this._off = { x: 0, y: 0 }; this._cOff = { x: 0, y: 0 };
-    this._fitR = 2.6; this._worldR = 2.9;
+    this._fitR = 2.6; this._worldR = 2.9; this._maxR = 16;
+    this._pan = new THREE.Vector3();     // user pan of the look-at point (ground plane)
     this._portChips = [];
     this._target = new THREE.Vector3(0, 0.05, 0);
     this._chips = [];
@@ -139,58 +140,80 @@ class HexBoard extends HTMLElement {
     this._renderer?.dispose();
   }
 
-  // ---------------- input: orbit (with inertia), pinch/wheel zoom, tap ----------------
+  // ---------------- input ----------------
+  // Touch: one finger orbits, two fingers pinch-zoom AND pan — all direct, nothing
+  // eased or flung, so the board stays exactly under the fingers.
+  // Mouse: left-drag orbits (with a short glide), right/shift-drag pans, wheel zooms,
+  // double-click recentres.
   _bindInput() {
     const el = this._canvas;
     const pts = new Map();               // active pointers by id
-    let lastDist = 0, downAt = null, moved = 0, lastMoveT = 0;
-    const twoDist = () => { const a = [...pts.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); };
+    let lastDist = 0, lastMid = null, downAt = null, moved = 0, lastMoveT = 0, mousePan = false, lastType = 'mouse';
+    const two = () => { const a = [...pts.values()]; return { d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y), x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2 }; };
     const down = e => {
+      lastType = e.pointerType || 'mouse';
+      if (lastType === 'mouse' && e.button !== 0 && e.button !== 2) return;
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      this._suppressClick = false;
+      // capture only when the canvas itself was hit; a gesture that starts on a pick
+      // marker keeps its target so a plain tap still clicks it (touch is implicitly
+      // captured anyway, and up/move are heard on window)
+      if (e.target === el) { try { el.setPointerCapture(e.pointerId); } catch (_) {} }
       el.style.cursor = 'grabbing';
-      this._dragging = true; this._vAz = 0; this._vPo = 0; this._azGoal = this._poGoal = null;
-      if (pts.size === 1) { downAt = { x: e.clientX, y: e.clientY, t: performance.now() }; moved = 0; }
-      if (pts.size === 2) { lastDist = twoDist(); downAt = null; }
+      this._dragging = true; this._vAz = 0; this._vPo = 0; this._azGoal = this._poGoal = null; this._panHome = false;
+      mousePan = lastType === 'mouse' && (e.button === 2 || e.shiftKey);
+      if (pts.size === 1) { downAt = { x: e.clientX, y: e.clientY, t: performance.now() }; moved = 0; lastMoveT = 0; }
+      if (pts.size === 2) { const g = two(); lastDist = g.d; lastMid = g; downAt = null; this._suppressClick = true; }
     };
     const move = e => {
       const p = pts.get(e.pointerId);
-      if (!p) { if (e.pointerType === 'mouse') this._hover(e); return; }
-      if (pts.size === 2) {                       // exactly two fingers -> pinch zoom
+      if (!p) { if (e.pointerType === 'mouse' && e.target === el) this._hover(e); return; }
+      if (pts.size === 2) {                       // two fingers -> pinch zoom + pan
         p.x = e.clientX; p.y = e.clientY;
-        const d = twoDist();
-        if (lastDist && d) this._zoomBy(lastDist / d);
-        lastDist = d;
-      } else if (pts.size === 1) {                // one finger -> orbit / look around
+        const g = two();
+        if (lastDist && g.d) this._zoomBy(lastDist / g.d);
+        if (lastMid) this._panBy(g.x - lastMid.x, g.y - lastMid.y);
+        lastDist = g.d; lastMid = g;
+      } else if (pts.size === 1) {
         const dx = e.clientX - p.x, dy = e.clientY - p.y;
+        p.x = e.clientX; p.y = e.clientY;
+        moved += Math.abs(dx) + Math.abs(dy);
+        if (moved >= 8) this._suppressClick = true;   // a drag that began on a marker isn't a tap
+        if (mousePan) { this._panBy(dx, dy); return; }
         const now = performance.now(), dt = Math.max(8, now - (lastMoveT || now - 16));
         lastMoveT = now;
-        moved += Math.abs(dx) + Math.abs(dy);
         const dAz = -dx * 0.006, dPo = -dy * 0.005;
         this._az += dAz;
         this._po = Math.min(PO_MAX, Math.max(PO_MIN, this._po + dPo));
-        // remember a smoothed release velocity (radians per ms) for the glide
-        this._vAz = this._vAz * 0.5 + (dAz / dt) * 0.5;
-        this._vPo = this._vPo * 0.5 + (dPo / dt) * 0.5;
-        p.x = e.clientX; p.y = e.clientY;
-      } else { p.x = e.clientX; p.y = e.clientY; } // 3+ fingers: track only, never zoom
+        if (lastType === 'mouse') {               // remember a release velocity for the glide
+          this._vAz = this._vAz * 0.5 + (dAz / dt) * 0.5;
+          this._vPo = this._vPo * 0.5 + (dPo / dt) * 0.5;
+        }
+      } else { p.x = e.clientX; p.y = e.clientY; } // 3+ fingers: track only
     };
     const up = e => {
       if (!pts.has(e.pointerId)) return;
       pts.delete(e.pointerId);
       try { el.releasePointerCapture(e.pointerId); } catch (_) {}
-      if (pts.size < 2) lastDist = 0;
+      if (pts.size < 2) { lastDist = 0; lastMid = null; }
+      // the finger left after a pinch keeps its tracked position, so it orbits on smoothly;
+      // it just mustn't count as a tap when lifted
+      if (pts.size === 1) downAt = null;
       if (!pts.size) {
         el.style.cursor = 'grab';
-        this._dragging = false;
-        // a stale velocity (finger rested before lifting) should not fling the board
+        this._dragging = false; mousePan = false;
+        // a stale velocity (pointer rested before release) should not fling the board
         if (performance.now() - lastMoveT > 90) { this._vAz = 0; this._vPo = 0; }
-        if (downAt && moved < 8 && performance.now() - downAt.t < 450 && e.type === 'pointerup') this._tap(e);
+        if (downAt && moved < 8 && performance.now() - downAt.t < 450 && e.type === 'pointerup' && e.target === el) this._tap(e);
         downAt = null;
+        // the click (if any) follows this pointerup; forget the drag once it has passed
+        setTimeout(() => { this._suppressClick = false; }, 0);
       }
     };
-    el.addEventListener('pointerdown', down);
-    el.addEventListener('pointermove', move);
+    // gestures are heard on the whole board (canvas, token overlays, pick markers), so a
+    // pinch or orbit works wherever the fingers land
+    this.addEventListener('pointerdown', down);
+    window.addEventListener('pointermove', move);
     el.addEventListener('pointerleave', () => this._setHoverHex(null));
     // release/cancel listened on window: a finger lifted off the canvas still clears,
     // so a stale pointer can never wedge the gesture into permanent pinch-zoom mode
@@ -198,17 +221,36 @@ class HexBoard extends HTMLElement {
     window.addEventListener('pointercancel', up);
     el.addEventListener('lostpointercapture', up);
     el.addEventListener('wheel', e => { e.preventDefault(); this._zoomBy(1 + Math.max(-60, Math.min(60, e.deltaY)) * 0.0016); }, { passive: false });
-    el.addEventListener('dblclick', () => this.resetView());
+    el.addEventListener('contextmenu', e => e.preventDefault());
+    el.addEventListener('dblclick', () => { if (lastType === 'mouse') this.resetView(); });
   }
 
+  /** User zoom: applied immediately (no easing) so it tracks the fingers / wheel. */
   _zoomBy(f) {
+    if (!Number.isFinite(f) || f <= 0) return;
     this._userZoom = true;
-    this._rad = Math.min(this._maxOut(), Math.max(MINR, this._rad * f));
+    const r = Math.min(this._maxR, Math.max(MINR, this._rad * f));
+    if (!Number.isFinite(r)) return;
+    this._rad = this._cRad = r;
+  }
+
+  /** User pan: slide the look-at point so the ground follows the drag. */
+  _panBy(dx, dy) {
+    const vf = Math.tan((this._camera.fov * Math.PI / 180) / 2);
+    const s = 2 * this._cRad * vf / (this._h || 1);              // world units per px at the target
+    const s2 = s / Math.max(0.35, Math.cos(this._po));            // ground is foreshortened vertically
+    const ca = Math.cos(this._az), sa = Math.sin(this._az);
+    const nx = this._pan.x - ca * dx * s - sa * dy * s2;
+    const nz = this._pan.z + sa * dx * s - ca * dy * s2;
+    if (!Number.isFinite(nx) || !Number.isFinite(nz)) return;
+    this._pan.set(nx, 0, nz);
+    const lim = Math.max(1, this._fitR);                         // keep some island in view
+    if (this._pan.length() > lim) this._pan.setLength(lim);
   }
 
   /** Recentre: glide back to the default angle and the fitted distance. */
   resetView() {
-    this._vAz = this._vPo = 0; this._userZoom = false;
+    this._vAz = this._vPo = 0; this._userZoom = false; this._panHome = true;
     this._azGoal = Math.round(this._az / (Math.PI * 2)) * Math.PI * 2;
     this._poGoal = PO_DEFAULT;
     this._fit();
@@ -230,16 +272,21 @@ class HexBoard extends HTMLElement {
     // exact: fit the island's real outline at the default angle (tighter, bigger island);
     // otherwise a bounding circle, which stays framed while the island spins
     this._exact = !!(opts && opts.exact);
-    this._userZoom = false;
+    // a manual zoom survives chrome changes; resetView() is what discards it
     this._resize();
   }
 
-  _maxOut() { return Math.max(8, this._fitDistance({ top: 0, right: 0, bottom: 0, left: 0 }, this._worldR) * 1.7); }
+  /** Farthest the user may zoom out: the whole island + water ring with room to spare. */
+  _updateMaxOut() {
+    const d = this._fitDistance({ top: 0, right: 0, bottom: 0, left: 0 }, this._worldR).d;
+    this._maxR = Math.max(8, Number.isFinite(d) ? d * 1.7 : 16);
+  }
 
-  /** Pose a camera for the given orbit + distance + view offset. */
-  _pose(cam, az, po, rad, ox, oy) {
-    cam.position.set(this._target.x + rad * Math.sin(po) * Math.sin(az), this._target.y + rad * Math.cos(po), this._target.z + rad * Math.sin(po) * Math.cos(az));
-    cam.lookAt(this._target);
+  /** Pose a camera for the given orbit + distance + view offset (+ optional pan). */
+  _pose(cam, az, po, rad, ox, oy, pan) {
+    const tx = this._target.x + (pan ? pan.x : 0), ty = this._target.y, tz = this._target.z + (pan ? pan.z : 0);
+    cam.position.set(tx + rad * Math.sin(po) * Math.sin(az), ty + rad * Math.cos(po), tz + rad * Math.sin(po) * Math.cos(az));
+    cam.lookAt(tx, ty, tz);
     // the view offset slides the image so the island centres in the free region
     // without tilting the horizon
     cam.setViewOffset(this._w, this._h, ox, oy, this._w, this._h);
@@ -291,6 +338,7 @@ class HexBoard extends HTMLElement {
     this._camera.aspect = w / h;
     this._camera.updateProjectionMatrix();
     this._renderer.setSize(w, h, false);
+    this._updateMaxOut();
     this._fit();
     if (first) { this._cRad = this._rad; this._cOff = { ...this._off }; }
   }
@@ -311,6 +359,8 @@ class HexBoard extends HTMLElement {
     this._clearPieces();
     this._syncPieces(false);
     this._clearHexPick();
+    this._pan.set(0, 0, 0);
+    this._updateMaxOut();
     this._fit();
   }
 
@@ -667,8 +717,8 @@ class HexBoard extends HTMLElement {
       if (t.label != null) { b.dataset.label = t.label; b.innerHTML = `<span>${t.label}</span>`; }
       if (t.title) { b.title = t.title; b.setAttribute('aria-label', t.title); }
       const key = t.key;
-      b.addEventListener("pointerdown", ev => ev.stopPropagation());
-      b.addEventListener("click", ev => { ev.stopPropagation(); this._onPick && this._onPick(key); });
+      b.style.touchAction = "none";
+      b.addEventListener("click", ev => { ev.stopPropagation(); if (this._suppressClick) return; this._onPick && this._onPick(key); });
       if (t.cls === 'h') {
         b.addEventListener('pointerenter', () => this._setHoverHex(key));
         b.addEventListener('pointerleave', () => this._setHoverHex(null));
@@ -814,7 +864,16 @@ class HexBoard extends HTMLElement {
     }
   }
 
+  /** One frame. three.js only schedules the next frame after this returns, so an
+   *  exception here would stop the board for good — catch, report once, carry on. */
   _frame() {
+    try { this._frameBody(); }
+    catch (err) {
+      if (!this._frameErr) { this._frameErr = true; console.error('hex-board frame error', err); }
+    }
+  }
+
+  _frameBody() {
     // size changes are picked up here rather than from a ResizeObserver, which
     // can trip "loop completed with undelivered notifications"
     if (this.clientWidth !== this._w || this.clientHeight !== this._h) this._resize();
@@ -876,10 +935,21 @@ class HexBoard extends HTMLElement {
       this._po += (this._poGoal - this._po) * k;
       if (Math.abs(this._poGoal - this._po) < 1e-3) { this._po = this._poGoal; this._poGoal = null; }
     }
+    if (this._panHome) {
+      this._pan.multiplyScalar(1 - k);
+      if (this._pan.lengthSq() < 1e-6) { this._pan.set(0, 0, 0); this._panHome = false; }
+    }
     this._cRad += (this._rad - this._cRad) * k;
     this._cOff.x += (this._off.x - this._cOff.x) * k;
     this._cOff.y += (this._off.y - this._cOff.y) * k;
-    this._pose(this._camera, this._az, this._po, this._cRad, this._cOff.x, this._cOff.y);
+    // a camera that has gone non-finite draws nothing and never recovers — reset it
+    if (![this._az, this._po, this._rad, this._cRad, this._cOff.x, this._cOff.y, this._pan.x, this._pan.z].every(Number.isFinite)) {
+      this._az = 0; this._po = PO_DEFAULT; this._vAz = this._vPo = 0; this._azGoal = this._poGoal = null;
+      this._pan.set(0, 0, 0); this._userZoom = false; this._rad = 6;
+      this._fit();
+      this._cRad = this._rad; this._cOff = { ...this._off };
+    }
+    this._pose(this._camera, this._az, this._po, this._cRad, this._cOff.x, this._cOff.y, this._pan);
     this._renderer.render(this._scene, this._camera);
     this._syncChips();
     this._syncPick();

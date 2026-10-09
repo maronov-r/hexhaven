@@ -124,7 +124,7 @@ Both orientations are first-class.
 - **Portrait:** banner + menu on top, rival chips in their own row, a one-line event ticker; the command bar wraps (VP + Build / Trade / primary, then the hand) and has a grab handle to collapse the hand row. Build opens a tray above the bar.
 - **Landscape:** banner and rival chips share one row; a single thin bar with icon-only Build/Trade.
 - **Desktop / tablet landscape (≥1100×600):** rival cards in a right-hand column, build actions inline in the bar.
-- **Board gestures:** one finger orbits/looks around; two fingers pinch-zoom. Generous zoom-out so the whole island fits on a phone.
+- **Board gestures:** one finger orbits; two fingers pinch-zoom and pan, tracking the fingers directly (no lag, no fling). Generous zoom-out so the whole island fits on a phone; zoom in and pan to read any corner.
 - **Focus mode** clears the chrome entirely for a pure-map view.
 
 ## 11. Do / Don't
