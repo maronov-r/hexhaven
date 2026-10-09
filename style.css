@@ -329,9 +329,7 @@ input[type=text]:focus{outline:none;border-color:var(--brass)}
 @keyframes hb-mark{0%,100%{box-shadow:0 0 0 2px rgba(240,199,120,.9),0 0 0 4px rgba(240,199,120,0)}50%{box-shadow:0 0 0 2px rgba(240,199,120,1),0 0 10px 4px rgba(240,199,120,.45)}}
 .hb-pick{position:absolute;left:0;top:0;padding:0;border:0;background:transparent;cursor:pointer;transition:filter .12s}
 .hb-pick::before{content:"";position:absolute;inset:-9px;border-radius:50%}
-.hb-pick span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--sans);font-size:10px;font-weight:800;color:var(--brass-ink);letter-spacing:-.02em}
 .hb-pick-v{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff0c8,#e0b15e 70%);animation:hb-mark 1.5s infinite}
-.hb-pick-v[data-label]{width:22px;height:22px}
 .hb-pick-e{width:24px;height:11px;border-radius:7px;background:rgba(240,199,120,.75);border:1.5px solid #fff0c8;animation:hb-mark 1.5s infinite}
 .hb-pick-s{width:24px;height:11px;border-radius:7px;background:rgba(63,169,255,.6);border:1.5px solid #3fa9ff;animation:hb-mark 1.5s infinite}
 .hb-pick-h{width:22px;height:22px;border-radius:50%;background:rgba(255,110,96,.35);border:2px solid rgba(255,150,140,.95);transform-origin:50% 50%}

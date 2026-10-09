@@ -32,7 +32,7 @@ The 3D board is an **ES module** that imports three.js. Classic scripts and the 
 
 ### 3D board API (`window.__hexBoard`)
 - `setState(S)` — heavy; rebuild terrain/tokens/harbours/ocean. Call **once per new island** only.
-- `refresh()` — cheap; **diffs** pieces against `S` and only touches what changed. New pieces drop in with a bounce + ground ripple; the robber hops between hexes. Call after **every** move.
+- `refresh()` — cheap; **diffs** pieces against `S` and only touches what changed. Placed pieces simply appear — **no drop-in or ripple effects** (Mark found them distracting; don't add them back). The robber slides briefly to its new tile. Call after **every** move.
 - `pulse(total)` — flash the tokens and glow the tiles matching a dice roll.
 - `setInsets({top,right,bottom,left}, {exact})` — reserve px for floating chrome; the island frames itself centred in the free rect (via `camera.setViewOffset`, so the horizon never tilts) and **eases** there. `exact:true` fits the real hex outline at the default angle (used in play); otherwise a bounding circle (used on the spinning menu). `setPanels(x,y,shift)` is a legacy wrapper.
 - `resetView()` — glide back to the default angle + fitted zoom (double-click on the board does the same). `setSpin(radPerSec)` — idle orbit (menu/setup only).
@@ -45,7 +45,7 @@ Robustness: `_frame()` wraps `_frameBody()` in try/catch because three.js only s
 
 ### Placement picking (how humans place on the 3D board)
 `ui.js` `renderPick()` reads the engine's `settSpots/roadSpots/citySpots/shipSpots` for the current `mode`, projects each legal vertex/edge/hex to a DOM marker over the canvas via `board.setPick(...)`, and the marker click calls the **existing** `onVertexTap/onEdgeTap/onHexTap`. The engine's interaction model is reused untouched.
-- Vertex markers carry a `label` (the spot's production: sum of pips on adjacent tiles) and a `title` (tiles + harbour).
+- Markers are plain — **no numbers on them** (Mark asked for them removed). Vertex markers keep a `title` (tiles + harbour) for hover/screen readers only.
 - Hex picks (robber) also get a 3D highlight: eligible tiles glow, the hovered one fills, and a tap **anywhere on the tile** picks it (ray → ground plane → nearest hex). The small DOM target stays for keyboard/scripted clicks.
 - `renderPick` caches by a signature (mode, robber, piece counts) so markers aren't rebuilt on every `renderAll`.
 

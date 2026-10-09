@@ -64,7 +64,7 @@ Engine→3D key mapping: `wood→forest, brick→hills, sheep→pasture, wheat�
 - **The robber** parks on a tile and desaturates it (`saturate(.4) brightness(.62)`) to block its payout; it starts on the desert.
 - **Water**: a ring of water hexes around the land, sitting in an open **ocean** that deepens and fades into the night background. The ocean has only a faint, slow swell — no glitter. Boats drift near harbours. Keep the sea calm — motion belongs to the land.
 - **Lighting**: warm key sun with soft shadows, a sky/ground hemisphere fill, and a cool rim light from behind so low-poly facets read.
-- **Pieces** are glowing low-poly models in the neon player colour. New pieces **drop in** with a small bounce and a ground ripple in the owner's colour, so a rival's move is noticed; the robber **hops** between tiles.
+- **Pieces** are glowing low-poly models in the neon player colour. They simply appear when placed — no drop-in, bounce or ripple. The robber slides briefly to its new tile.
 
 ## 5. Typography
 
@@ -96,7 +96,7 @@ Standard easing everywhere: `cubic-bezier(.2,.9,.25,1)`. Keep it purposeful — 
 - `hh-bump` — a resource card pulses brass when it gains.
 - **Dice** — two 3D cubes tumble onto the rolled faces in the middle of the board, the total fades in, then the result moves to the turn banner (`hh-tumble` on the mini dice).
 - **Payouts** — resource tiles fly from the producing hexes into the hand; the card bumps and glows brass on arrival.
-- **Board** — pieces drop in (`outBack`), ground ripples, robber hop, producing tiles glow on a roll; the camera eases when reframing and glides after a flick.
+- **Board** — placed pieces appear instantly (no placement effects); the robber slides; producing tiles glow on a roll; the camera eases only when it reframes itself.
 - `hh-breathe` — loading crest.
 - `hb-pop` — number token flashes on a matching roll.
 Respect `prefers-reduced-motion` (all animation/transition disabled).
@@ -116,7 +116,7 @@ Respect `prefers-reduced-motion` (all animation/transition disabled).
 - **Command bar** (bottom, the only always-on panel): VP "of N" → the hand → build actions → Trade → **one primary button** that is Roll dice, then End turn.
 - **Hint pill**: just above the bar, with **Cancel** while placing. **Toasts** (top centre) for what happens to you.
 
-**Card & control anatomy:** resource card = a tile filled with its resource colour, white game-icon silhouette, serif count, tiny uppercase label; empty = desaturated. The dev-card stack is a dark brass card with a green dot when one is playable. Build action = label + cost as small resource-colour chips with white icons — chips you can't cover yet are dimmed, a corner badge shows pieces left; affordable actions get a brass edge. Placement markers: small glowing brass discs showing each spot's production number; edges are brass pills; robber targets light the whole tile. Segmented controls: equal-width buttons, selected = brass fill + brass-ink text. Selection borders are 2px brass.
+**Card & control anatomy:** resource card = a tile filled with its resource colour, white game-icon silhouette, serif count, tiny uppercase label; empty = desaturated. The dev-card stack is a dark brass card with a green dot when one is playable. Build action = label + cost as small resource-colour chips with white icons — chips you can't cover yet are dimmed, a corner badge shows pieces left; affordable actions get a brass edge. Placement markers: small plain glowing brass discs (no numbers); edges are brass pills; robber targets light the whole tile. Segmented controls: equal-width buttons, selected = brass fill + brass-ink text. Selection borders are 2px brass.
 
 ## 10. Mobile (the map must stay the star)
 

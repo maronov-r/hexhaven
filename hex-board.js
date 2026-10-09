@@ -1,7 +1,7 @@
 // <hex-board> — the 3D island, driven by a Hexhaven game state object.
-// Owns its renderer, camera, hand-rolled orbit controls (with inertia and eased
-// reframing), the living-detail animation loop, piece drop-in / robber hop
-// animations, hex picking, and the projected number-token overlay.
+// Owns its renderer, camera, hand-rolled orbit/pinch/pan controls (with eased
+// reframing), the living-detail animation loop, the robber's slide between tiles,
+// hex picking, and the projected number-token overlay.
 // No import map needed: three.js comes from an absolute URL, and tiles3d/pieces3d
 // take THREE as an argument rather than importing it.
 import * as THREE from 'https://unpkg.com/three@0.184.0/build/three.module.js';
@@ -27,8 +27,7 @@ const PORT_LABEL = { wood:'LUMBER', brick:'BRICK', sheep:'WOOL', wheat:'GRAIN', 
 const PORT_COL = { wood:'#3e7c4f', brick:'#c4633f', sheep:'#8fbf6a', wheat:'#e2b84b', ore:'#7c8ca6', any:'#5b7089' };
 const PIECE_SCALE = { settlement: 1.95, city: 1.8, road: 1.3, robber: 1.75 };
 const PO_DEFAULT = 0.8, PO_MIN = 0.22, PO_MAX = 1.42, MINR = 1.6;
-const ease = { outBack: k => { const c = 1.6; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); },
-  outCubic: k => 1 - Math.pow(1 - k, 3), inOut: k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2 };
+const ease = { inOut: k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2 };
 
 const CHIP_CSS = `
 @keyframes hb-pop{0%{box-shadow:0 0 0 0 rgba(240,199,120,.95),0 3px 7px rgba(0,0,0,.45)}70%{box-shadow:0 0 0 16px rgba(240,199,120,0),0 3px 7px rgba(0,0,0,.45)}100%{box-shadow:0 0 0 0 rgba(240,199,120,0),0 3px 7px rgba(0,0,0,.45)}}
@@ -512,19 +511,17 @@ class HexBoard extends HTMLElement {
   _syncPieces(animate) {
     const want = this._wantedPieces();
     const have = this._pieceMap;
-    const fresh = [];
     for (const [k, cur] of [...have]) {
       const w = want.get(k);
       if (k === 'robber' && w) {
-        if (cur.hex !== w.hex) {          // hop the robber across rather than teleporting
+        if (cur.hex !== w.hex) {          // slide the robber across so you can see where it went
           const from = cur.obj.position.clone(), to = new THREE.Vector3(w.x, TOPY, w.z);
           cur.hex = w.hex;
-          if (animate) this._animate(650, k2 => {
+          if (animate) this._animate(420, k2 => {
             const e = ease.inOut(k2);
             cur.obj.position.lerpVectors(from, to, e);
-            cur.obj.position.y = TOPY + Math.sin(Math.PI * e) * 0.55;
-            cur.obj.rotation.y = w.ry + Math.sin(Math.PI * e) * 0.8;
-          }, () => { this._ripple(w.x + 0.16, w.z + 0.24, 0x9aa3c0, 0.4); });
+            cur.obj.position.y = TOPY + Math.sin(Math.PI * e) * 0.15;
+          }, () => { cur.obj.position.copy(to); });
           else cur.obj.position.copy(to);
         }
         continue;
@@ -535,37 +532,9 @@ class HexBoard extends HTMLElement {
       if (have.has(k)) continue;
       const obj = this._makePiece(w);
       this._scene.add(obj);
-      have.set(k, { obj, sig: w.sig, hex: w.hex });
-      if (animate && k !== 'robber') fresh.push({ obj, w });
+      have.set(k, { obj, sig: w.sig, hex: w.hex });   // placed pieces simply appear — no effects
     }
-    fresh.forEach(({ obj, w }, i) => this._dropIn(obj, w, i * 90));
     this._markRobberChip();
-  }
-
-  _dropIn(obj, w, delay) {
-    const s1 = obj.scale.x, y1 = obj.position.y;
-    obj.scale.setScalar(0.0001);
-    const col = w.p != null ? neon(this._S.players[w.p].color) : 0xffffff;
-    this._animate(520, k => {
-      const e = ease.outBack(k);
-      obj.scale.setScalar(Math.max(0.0001, s1 * Math.min(1.15, 0.25 + 0.75 * e)));
-      obj.position.y = y1 + (1 - ease.outCubic(k)) * 0.5;
-    }, () => { obj.scale.setScalar(s1); obj.position.y = y1; this._ripple(w.x, w.z, col, w.kind === 'road' || w.kind === 'ship' ? 0.24 : 0.3); }, delay);
-  }
-
-  /** An expanding glow ring on the ground — draws the eye to where something happened. */
-  _ripple(x, z, color, size) {
-    const geo = new THREE.RingGeometry(0.8, 1, 40);
-    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-    const m = new THREE.Mesh(geo, mat);
-    m.rotation.x = -Math.PI / 2;
-    m.position.set(x, TOPY + 0.012, z);
-    this._scene.add(m);
-    this._animate(900, k => {
-      const e = ease.outCubic(k);
-      m.scale.setScalar(size * (0.25 + e * 0.75));
-      mat.opacity = 0.6 * (1 - k) * (1 - k);
-    }, () => { this._scene.remove(m); geo.dispose(); mat.dispose(); });
   }
 
   _animate(dur, step, done, delay = 0) {
@@ -714,7 +683,6 @@ class HexBoard extends HTMLElement {
       b.type = "button";
       b.className = "hb-pick hb-pick-" + (t.cls || "v");
       b.style.pointerEvents = "auto";
-      if (t.label != null) { b.dataset.label = t.label; b.innerHTML = `<span>${t.label}</span>`; }
       if (t.title) { b.title = t.title; b.setAttribute('aria-label', t.title); }
       const key = t.key;
       b.style.touchAction = "none";
